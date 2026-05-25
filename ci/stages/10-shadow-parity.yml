@@ -1,0 +1,45 @@
+name: '10 — Shadow Parity Gate'
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  shadow-parity:
+    name: Shadow parity verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript compile check
+        run: npx tsc --noEmit
+
+      - name: Validate contracts
+        run: npx ts-node scripts/validate-contracts.ts --all
+
+      - name: Run shadow vector suite
+        run: npx ts-node scripts/vectors/shadow.vec.ts
+
+      - name: Upload replay artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-parity-artifacts
+          path: |
+            dist/shadow-artifacts/
+          retention-days: 90
+
+env:
+  PRE_SHADOW_MODE: 'true'
+  NODE_ENV: 'test'
