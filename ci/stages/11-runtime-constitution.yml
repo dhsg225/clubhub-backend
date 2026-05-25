@@ -1,0 +1,38 @@
+name: '11 — Runtime Constitution Gate'
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  runtime-constitution:
+    name: Runtime constitutional verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript compile check
+        run: npx tsc --noEmit
+
+      - name: Runtime constitutional contract scan (FP-20 to FP-25)
+        run: npx ts-node scripts/validate-contracts.ts --all
+
+      - name: Run runtime integration vectors
+        run: npx ts-node scripts/vectors/runtime-integration.vec.ts
+
+      - name: Verify replay audit integrity
+        run: npx ts-node scripts/validation/replay-stability.ts
+
+env:
+  NODE_ENV: 'test'
