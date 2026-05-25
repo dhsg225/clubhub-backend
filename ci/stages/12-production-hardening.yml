@@ -1,0 +1,32 @@
+name: '12 — Production Hardening Gate'
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  production-hardening:
+    name: Production hardening verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Contract scan (FP-01 through FP-25)
+        run: npx ts-node scripts/validate-contracts.ts --all
+      - name: Hardening vector suite
+        run: npx ts-node scripts/vectors/hardening.vec.ts
+      - name: System integrity — cross-subsystem consistency
+        run: npx ts-node scripts/system-integrity/cross-subsystem-consistency.ts
+      - name: System integrity — failure mode validation
+        run: npx ts-node scripts/system-integrity/failure-mode-validation.ts
+      - name: System integrity — constitutional boundary check
+        run: npx ts-node scripts/system-integrity/constitutional-boundary-check.ts
+      - name: Full-stack determinism (100 runs)
+        run: npx ts-node scripts/system-integrity/full-stack-determinism.ts

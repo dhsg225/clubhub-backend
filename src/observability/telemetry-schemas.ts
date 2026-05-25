@@ -255,6 +255,56 @@ export interface EntropyJobLog extends BaseLogLine {
   duration_ms: number;
 }
 
+// ─── Production Hardening Events ─────────────────────────────────────────────
+
+export interface FailureEventLog extends BaseLogLine {
+  event_type: 'failure.event';
+  failure_class: number;
+  failure_mode_id: string;
+  subsystem: string;
+  message: string;
+  replay_impact: 'none' | 'flag' | 'halt';
+  shadow_impact: 'none' | 'halt_canary' | 'all_stop';
+  requires_human_review: boolean;
+}
+
+export interface CircuitBreakerLog extends BaseLogLine {
+  event_type: 'circuit_breaker.state_change';
+  subsystem: string;
+  from_state: string;
+  to_state: string;
+  consecutive_failures: number;
+  reason: string;
+}
+
+export interface StateTransitionLog extends BaseLogLine {
+  event_type: 'state.transition';
+  from_state: string;
+  to_state: string;
+  trigger_failure_class: number | null;
+  trigger_reason: string;
+}
+
+export interface DegradationEventLog extends BaseLogLine {
+  event_type: 'degradation.event';
+  subsystem: string;
+  degradation_type: string;
+  failure_class: number;
+  pre_affected: boolean;
+  shadow_affected: boolean;
+  entropy_affected: boolean;
+  audit_affected: boolean;
+}
+
+export interface ConstitutionalFreezeLog extends BaseLogLine {
+  event_type: 'constitutional.freeze';
+  freeze_state: string;
+  reason: string;
+  pre_allowed: boolean;
+  shadow_allowed: boolean;
+  canary_allowed: boolean;
+}
+
 // ─── Union Type for all log lines ────────────────────────────────────────────
 
 export type AnyLogLine =
@@ -279,4 +329,9 @@ export type AnyLogLine =
   | RollbackTriggerLog
   | PreviewRequestLog
   | ReplayAuditWriteLog
-  | EntropyJobLog;
+  | EntropyJobLog
+  | FailureEventLog
+  | CircuitBreakerLog
+  | StateTransitionLog
+  | DegradationEventLog
+  | ConstitutionalFreezeLog;
