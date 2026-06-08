@@ -9,6 +9,7 @@
 const crypto = require('node:crypto');
 const fs     = require('node:fs');
 const path   = require('node:path');
+const clock  = require('./governed-clock');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ class GovernedConfig {
     this._frozen         = false;
     this._version        = 1;
     this._history        = [];
+    this._pool           = null;
 
     // Record initial snapshot
     this._history.push(Object.freeze({
@@ -80,10 +82,71 @@ class GovernedConfig {
       changed_keys:         [],
       justification:        'initial_load',
       operator_id:          'system',
-      ts:                   new Date().toISOString(),
+      ts:                   clock.nowIso(),
       config_hash:          configHash(this._config),
       previous_config_hash: null,
     }));
+  }
+
+  setPool(pool) {
+    this._pool = pool;
+  }
+
+  // ── DB init ─────────────────────────────────────────────────────────────────
+
+  async initFromDb(pool) {
+    const p = pool || this._pool;
+    if (!p) return;
+
+    try {
+      await p.query(`
+        CREATE TABLE IF NOT EXISTS governed_config_history (
+          id             BIGSERIAL PRIMARY KEY,
+          config_version INT NOT NULL,
+          config_hash    VARCHAR(32) NOT NULL,
+          prev_hash      VARCHAR(32),
+          operator_id    VARCHAR(255),
+          justification  TEXT,
+          changed_keys   JSONB,
+          snapshot       JSONB NOT NULL,
+          ts             TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+
+      // Load latest config version from DB
+      const r = await p.query(
+        'SELECT * FROM governed_config_history ORDER BY config_version DESC LIMIT 1'
+      );
+      if (r.rows.length) {
+        const row = r.rows[0];
+        if (row.snapshot && typeof row.snapshot === 'object') {
+          this._config  = deepClone(row.snapshot);
+          this._version = row.config_version;
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  async persistSnapshot(pool, snap) {
+    const p = pool || this._pool;
+    if (!p) return;
+    try {
+      await p.query(
+        `INSERT INTO governed_config_history
+           (config_version, config_hash, prev_hash, operator_id, justification, changed_keys, snapshot, ts)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          snap.config_version,
+          snap.config_hash,
+          snap.previous_config_hash ?? null,
+          snap.operator_id ?? null,
+          snap.justification ?? null,
+          JSON.stringify(snap.changed_keys ?? []),
+          JSON.stringify(this._config),
+          snap.ts,
+        ]
+      );
+    } catch { /* fire-and-forget: non-fatal */ }
   }
 
   get(keyPath) {
@@ -129,12 +192,17 @@ class GovernedConfig {
       changed_keys:         changedKeys,
       justification,
       operator_id:          operator_id ?? null,
-      ts:                   new Date().toISOString(),
+      ts:                   clock.nowIso(),
       config_hash:          newHash,
       previous_config_hash: previousHash,
     });
 
     this._history.push(snap);
+
+    // Fire-and-forget DB persist
+    if (this._pool) {
+      this.persistSnapshot(this._pool, snap).catch(() => {});
+    }
 
     // Write to ledger if available
     if (this._operatorLedger) {
@@ -200,4 +268,85 @@ class GovernedConfig {
   }
 }
 
-module.exports = { GovernedConfig };
+// ── Singleton accessor API ─────────────────────────────────────────────────────
+// Provides a process-wide singleton for governed-config, so any module can call
+// getInstance() without needing the GovernedConfig class reference.
+// Set once at startup in index.js after DB init.
+
+let _singleton = null;
+
+function setInstance(instance) {
+  _singleton = instance;
+}
+
+function getInstance() {
+  return _singleton;
+}
+
+// ── Threshold accessor helpers ────────────────────────────────────────────────
+
+/**
+ * Get a governed threshold by dot-path (e.g. 'ota.ring1_max_pct').
+ * Returns undefined if not set or no singleton initialised.
+ * For bootstrap callers that need thresholds before index.js runs,
+ * this returns the value from the singleton's current in-memory config.
+ */
+function getThreshold(dotPath) {
+  return _singleton ? _singleton.get(dotPath) : undefined;
+}
+
+/**
+ * Like getThreshold() but throws if the value is undefined.
+ * Use on paths that MUST be present at runtime.
+ */
+function requireThreshold(dotPath) {
+  const value = getThreshold(dotPath);
+  if (value === undefined) {
+    throw new Error(
+      `governed-config: required threshold '${dotPath}' is undefined. ` +
+      'Ensure governed-config singleton is initialised before calling requireThreshold().'
+    );
+  }
+  return value;
+}
+
+/**
+ * Returns a frozen snapshot of the current governed config with its hash and version.
+ * Safe to use as a cache key or for replay labelling.
+ */
+function getThresholdSnapshot() {
+  if (!_singleton) return { config_hash: null, config_version: 0, snapshot: {} };
+  return {
+    config_hash:    _singleton.snapshot().config_hash,
+    config_version: _singleton._version,
+    snapshot:       _singleton.getAll(),
+  };
+}
+
+/**
+ * Returns the current governed config version number.
+ */
+function getThresholdVersion() {
+  return _singleton ? _singleton._version : 0;
+}
+
+// Module-level setPool / initFromDb — delegate to singleton (wired in index.js)
+function setPool(pool) {
+  if (_singleton) _singleton.setPool(pool);
+}
+
+async function initFromDb(pool) {
+  if (_singleton) await _singleton.initFromDb(pool);
+}
+
+module.exports = {
+  GovernedConfig,
+  setInstance,
+  getInstance,
+  getThreshold,
+  requireThreshold,
+  getThresholdSnapshot,
+  getThresholdVersion,
+  setPool,
+  initFromDb,
+};

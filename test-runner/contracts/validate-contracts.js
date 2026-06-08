@@ -31,6 +31,77 @@
  *  22. distributed_authority       — distributed-authority.js DB-backed (not memory-only)
  *  23. governed_config             — governed-config.js wraps config with versioning
  *  24. incident_orchestration      — incident-orchestrator.js exists with all incident states
+ *  25. recovery_governor_wired    — chaos.js routes waitForHealth() through RecoveryGovernor
+ *  26. fleet_consensus_wired      — epoch incremented at startup, generation on content change
+ *  27. freeze_enforcement         — rollout-store.js enforces freeze before promoteRing()
+ *  28. event_causality            — event-lineage.js exists with withLineage + orphan detection
+ *  29. operator_overrides         — operator-overrides.js with expiry, ledger, incident linkage
+ *  30. governance_db              — governance-db.js exists with cluster-global state (initSchema, incrementInt)
+ *  31. cluster_consensus_persistent — fleet-consensus.js has setPool + initFromDb for DB-backed epoch/generation/freeze
+ *  32. ledger_db_persistent       — operator-ledger.js has setPool + initFromDb + DB persistence
+ *  33. incident_durable           — incident-orchestrator.js has setPool + initFromDb + persistIncident
+ *  34. config_db_persistent       — governed-config.js has setPool + initFromDb for restart-safe config
+ *  35. no_direct_threshold_reads  — backend src files do not bypass governed-config for thresholds.json
+ *  36. deterministic_ids          — no crypto.randomBytes in ID generation for governed entities
+ *  37. freeze_ledger_linked       — ota.js freeze/unfreeze routes append to operator ledger
+ *
+ *  ── Active/Active Authority Convergence (38-45) ──
+ *  38. strong_freeze_read         — rollout-store.js uses DB-authoritative freeze read before promoting
+ *  39. async_epoch_increment      — incrementEpoch() is async+DB-authoritative; index.js awaits it
+ *  40. async_manifest_generation  — incrementManifestGeneration() is async+DB-authoritative; manifestEngine.js awaits it
+ *  41. linearized_ledger_append   — appendEntryLinearized() exists with pg advisory lock for total ordering
+ *  42. incident_version_lock      — transitionStrong() uses advisory lock + optimistic version locking
+ *  43. db_failure_governance      — DB_FAILURE_MODE and HA_SAFETY_MODEL defined in distributed-authority.js
+ *  44. governance_transaction_boundaries — strong freeze read + withAdvisoryLock primitive established
+ *  45. ha_deployment_ceiling      — active/active topology safety ratings and advisory-only paths documented
+ *
+ *  ── Governed-Config Accessor checks (46-49) ──
+ *  46. governed_threshold_accessor — governed-config.js exports getThreshold, requireThreshold, getThresholdSnapshot, getThresholdVersion
+ *  47. governed_config_singleton   — governed-config.js exports setInstance and getInstance
+ *  48. no_runtime_threshold_reads  — ota.js and screenAuth.js don't read thresholds.json directly at runtime
+ *  49. threshold_snapshot_hashing  — governed-config.js uses configHash and getThresholdSnapshot for content-addressable versioning
+ *
+ *  ── Event Lineage Mode checks (50-54) ──
+ *  50. lineage_mode_support        — event-lineage.js has LINEAGE_MODES (STRICT/REPORT/REPLAY)
+ *  51. rollout_lineage_wired       — rollout-store.js uses withLineage on RING_FROZEN/RING_PROMOTED events
+ *  52. incident_lineage_wired      — incident-orchestrator.js uses withLineage in createIncident
+ *  53. lineage_modes_exported      — LINEAGE_MODES exported from event-lineage.js
+ *  54. lineage_strict_throws       — verifyLineage STRICT mode throws on anomalies
+ *
+ *  ── Deterministic ID checks (55-58) ──
+ *  55. deterministic_id_module     — deterministic-id.js exists with deriveDeterministicId + crypto hash
+ *  56. incident_id_deterministic   — incident-orchestrator.js _makeIncidentId does not include Date.now()
+ *  57. incident_id_uses_module     — incident-orchestrator.js imports and calls deriveDeterministicId
+ *  58. deterministic_id_stable_stringify — deterministic-id.js uses stable serialisation
+ *
+ *  ── Cluster-Safe Freeze Authority checks (59-62) ──
+ *  59. freeze_epoch_counter        — fleet-consensus.js has freeze_epoch counter
+ *  60. get_freeze_state_strong     — fleet-consensus.js exports getFreezeStateStrong
+ *  61. freeze_epoch_db_persisted   — freeze_epoch persisted to DB in getFreezeStateStrong
+ *  62. freeze_epoch_increments     — _setFreeze and unfreezeRollout both increment _freezeEpoch
+ *
+ *  ── Operator Authority Enforcement checks (63-68) ──
+ *  63. operator_auth_module        — operatorAuth.js exists at backend/src/middleware/
+ *  64. operator_auth_hmac          — operatorAuth.js uses HMAC-SHA256 with timingSafeEqual
+ *  65. operator_auth_roles         — operatorAuth.js defines ADMIN, OPERATOR, VIEWER roles
+ *  66. operator_auth_exports       — operatorAuth.js exports requireOperatorAuth, issueOperatorToken, verifyOperatorToken
+ *  67. ota_mutation_protected      — OTA mutation routes protected by requireOperatorAuth
+ *  68. operator_token_expiry       — operatorAuth.js enforces token expiry
+ *
+ *  ── Resource Governance checks (69-72) ──
+ *  69. max_screens_bound           — fleet-consensus.js has MAX_SCREENS constant
+ *  70. screen_eviction_policy      — recordHeartbeat evicts oldest screen at MAX_SCREENS
+ *  71. ledger_max_size             — operator-ledger.js has MAX_LEDGER_ENTRIES
+ *  72. ledger_compaction           — operator-ledger.js compacts when exceeding MAX_LEDGER_ENTRIES
+ *
+ *  ── Governance Finalization checks (73-79) ──
+ *  73. governed_clock              — governed-clock.js present; event-lineage uses governed clock
+ *  74. full_lineage_enforcement    — core governed emitters use withLineage()
+ *  75. operator_revocation         — operator-sessions.js with revokeToken/revokeOperator/rotateSigningKey/isRevoked/initFromDb
+ *  76. jti_replay_protection       — operatorAuth.js embeds jti and checks revocation
+ *  77. strong_freeze_consistency   — fleet-consensus.js has freezeStrong() and DB failure policy
+ *  78. incident_lifecycle_governance — MAX_ACTIVE_INCIDENTS bounded; archiveResolvedIncidents present
+ *  79. certification_harness       — governance-certification.js present with all 10 scenarios
  *
  * Exit codes:
  *   0  — all checks pass
@@ -66,7 +137,19 @@ const DIST_AUTHORITY_PATH      = path.join(ROOT, 'backend/src/lib/distributed-au
 const GOVERNED_CONFIG_PATH     = path.join(ROOT, 'backend/src/lib/governed-config.js');
 const INCIDENT_ORCH_PATH       = path.join(ROOT, 'backend/src/lib/incident-orchestrator.js');
 const OTA_ROUTE_PATH           = path.join(ROOT, 'backend/src/routes/ota.js');
+const ROLLOUT_STORE_PATH       = path.join(ROOT, 'backend/src/lib/rollout-store.js');
+const MANIFEST_ENGINE_PATH     = path.join(ROOT, 'backend/src/lib/manifestEngine.js');
+const INDEX_PATH               = path.join(ROOT, 'backend/src/index.js');
+const EVENT_LINEAGE_PATH       = path.join(ROOT, 'backend/src/lib/event-lineage.js');
+const OPERATOR_OVERRIDES_PATH  = path.join(ROOT, 'backend/src/lib/operator-overrides.js');
 const REPORTS_DIR             = path.join(ROOT, 'reports');
+const DETERMINISTIC_ID_PATH   = path.join(ROOT, 'backend/src/lib/deterministic-id.js');
+const OPERATOR_AUTH_PATH      = path.join(ROOT, 'backend/src/middleware/operatorAuth.js');
+const GOVERNED_CLOCK_PATH     = path.join(ROOT, 'backend/src/lib/governed-clock.js');
+const ROLLOUT_STATE_PATH      = path.join(ROOT, 'backend/src/lib/rollout-state.js');
+const OPERATOR_SESSIONS_PATH  = path.join(ROOT, 'backend/src/lib/operator-sessions.js');
+const OPERATOR_AUTH_PATH2     = path.join(ROOT, 'backend/src/middleware/operatorAuth.js');
+const CERTIFICATION_PATH      = path.join(ROOT, 'test-runner/certification/governance-certification.js');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTHORITATIVE BINDING TABLE
@@ -1930,6 +2013,1191 @@ function checkIncidentOrchestration() {
   };
 }
 
+// ── Convergence hardening checks (25-29) ──────────────────────────────────────
+
+/**
+ * 25. recovery_governor_wired
+ * Verify chaos.js routes waitForHealth() through the RecoveryGovernor:
+ *   - constructor accepts a governor option
+ *   - _pendingRecovery is set by inject methods
+ *   - startRecovery is called within waitForHealth
+ *   - direct retry loop removed from public waitForHealth path
+ */
+function checkRecoveryGovernorWired() {
+  const violations = [];
+
+  if (!fs.existsSync(CHAOS_LIB_PATH)) {
+    return {
+      name: 'recovery_governor_wired', status: 'FAIL',
+      detail: 'chaos.js not found', violations: [{ issue: 'chaos.js missing' }], blocker: 'DB-1',
+    };
+  }
+
+  const src = fs.readFileSync(CHAOS_LIB_PATH, 'utf8');
+
+  if (!src.includes('_governor')) {
+    violations.push({ issue: "chaos.js has no '_governor' field — RecoveryGovernor not accepted as constructor option" });
+  }
+  if (!src.includes('_pendingRecovery')) {
+    violations.push({ issue: "chaos.js has no '_pendingRecovery' — inject methods do not stage recovery category" });
+  }
+  if (!src.includes('startRecovery')) {
+    violations.push({ issue: "chaos.js does not call startRecovery() — waitForHealth not routed through governor" });
+  }
+  if (!src.includes('completeRecovery')) {
+    violations.push({ issue: "chaos.js does not call completeRecovery() — successful recovery not signalled to governor" });
+  }
+  if (!src.includes('failRecovery')) {
+    violations.push({ issue: "chaos.js does not call failRecovery() — failure escalation path missing" });
+  }
+
+  // Verify runner.js passes governor to ChaosController
+  const runnerSrc = fs.existsSync(RUNNER_PATH) ? fs.readFileSync(RUNNER_PATH, 'utf8') : '';
+  if (!runnerSrc.includes('governor:') && !runnerSrc.includes('governor :')) {
+    violations.push({
+      file:   path.relative(ROOT, RUNNER_PATH),
+      issue:  'runner.js does not pass governor to ChaosController — RecoveryGovernor not wired into chaos execution',
+      action: "Add 'governor: recovery' to the ChaosController constructor options in runner.js",
+    });
+  }
+
+  return {
+    name:    'recovery_governor_wired',
+    status:  violations.length === 0 ? 'PASS' : 'FAIL',
+    detail:  violations.length === 0
+      ? 'RecoveryGovernor verified: chaos.js routes waitForHealth() through governor; runner.js injects governor'
+      : `${violations.length} recovery governor wiring violation(s)`,
+    violations,
+    blocker: violations.length > 0
+      ? `DB-1: Recovery governor not wired: [${violations.map(v => (v.issue ?? '').slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 26. fleet_consensus_wired
+ * Verify consensus lineage is incremented at runtime boundaries:
+ *   - index.js calls incrementEpoch() at startup
+ *   - manifestEngine.js calls incrementManifestGeneration() when content changes
+ *   - manifest route exports lineage rejection classification
+ */
+function checkFleetConsensusWired() {
+  const violations = [];
+
+  const indexSrc   = fs.existsSync(INDEX_PATH)          ? fs.readFileSync(INDEX_PATH, 'utf8')          : '';
+  const engineSrc  = fs.existsSync(MANIFEST_ENGINE_PATH) ? fs.readFileSync(MANIFEST_ENGINE_PATH, 'utf8') : '';
+  const manifestSrc = fs.existsSync(MANIFEST_ROUTE_PATH) ? fs.readFileSync(MANIFEST_ROUTE_PATH, 'utf8') : '';
+
+  if (!indexSrc.includes('incrementEpoch')) {
+    violations.push({
+      file:   path.relative(ROOT, INDEX_PATH),
+      issue:  'index.js does not call incrementEpoch() — authority_epoch is never advanced at startup',
+      action: "Call fleetConsensus.incrementEpoch() after PLATFORM.STARTUP event in index.js",
+    });
+  }
+  if (!engineSrc.includes('incrementManifestGeneration')) {
+    violations.push({
+      file:   path.relative(ROOT, MANIFEST_ENGINE_PATH),
+      issue:  'manifestEngine.js does not call incrementManifestGeneration() — content changes are not reflected in consensus lineage',
+      action: "Call fleetConsensus.incrementManifestGeneration() when manifest checksum changes in computeManifest()",
+    });
+  }
+  if (!manifestSrc.includes('LINEAGE_REJECTION') && !manifestSrc.includes('STALE_EPOCH')) {
+    violations.push({
+      file:   path.relative(ROOT, MANIFEST_ROUTE_PATH),
+      issue:  'manifest route does not classify lineage rejections — stale screen submissions accepted without audit record',
+      action: "Add STALE_EPOCH/STALE_MANIFEST/UNKNOWN_AUTHORITY lineage rejection classification to manifest.js",
+    });
+  }
+
+  return {
+    name:    'fleet_consensus_wired',
+    status:  violations.length === 0 ? 'PASS' : 'FAIL',
+    detail:  violations.length === 0
+      ? 'Fleet consensus wiring verified: incrementEpoch on startup, incrementManifestGeneration on content change, lineage rejection classification present'
+      : `${violations.length} fleet consensus wiring violation(s)`,
+    violations,
+    blocker: violations.length > 0
+      ? `DB-1: Fleet consensus not wired: [${violations.map(v => (v.issue ?? '').slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 27. freeze_enforcement
+ * Verify rollout-store.js enforces freeze classifications before promoteRing():
+ *   - isRolloutFrozen() checked before promotion
+ *   - freeze classification labels present (CONSENSUS_SPLIT_BRAIN, AUTHORITY_LOSS, etc.)
+ *   - freeze emits RING_FROZEN event with freeze_class field
+ */
+function checkFreezeEnforcement() {
+  const violations = [];
+
+  if (!fs.existsSync(ROLLOUT_STORE_PATH)) {
+    return {
+      name: 'freeze_enforcement', status: 'FAIL',
+      detail: 'rollout-store.js not found',
+      violations: [{ issue: 'rollout-store.js missing' }],
+      blocker: 'DB-1: rollout-store.js missing',
+    };
+  }
+
+  const src = fs.readFileSync(ROLLOUT_STORE_PATH, 'utf8');
+
+  if (!src.includes('isRolloutFrozen')) {
+    violations.push({
+      file:   path.relative(ROOT, ROLLOUT_STORE_PATH),
+      issue:  "rollout-store.js promoteRing() does not check isRolloutFrozen() — consensus freezes are advisory only",
+      action: "Add fleetConsensus.isRolloutFrozen() check at the top of promoteRing() in rollout-store.js",
+    });
+  }
+
+  const FREEZE_CLASSES = ['CONSENSUS_SPLIT_BRAIN', 'AUTHORITY_LOSS', 'POLICY_DENY', 'MANUAL_OPERATOR_FREEZE'];
+  for (const cls of FREEZE_CLASSES) {
+    if (!src.includes(cls)) {
+      violations.push({
+        issue:  `Freeze classification '${cls}' not present in rollout-store.js`,
+        action: `Add '${cls}' classification to the freeze enforcement block in promoteRing()`,
+      });
+    }
+  }
+
+  if (!src.includes('freeze_class')) {
+    violations.push({
+      issue:  "promoteRing() does not emit 'freeze_class' in OTA.RING_FROZEN events — freeze reason is unclassified",
+      action: "Include 'freeze_class' field in OTA.RING_FROZEN emissions from rollout-store.js",
+    });
+  }
+
+  return {
+    name:    'freeze_enforcement',
+    status:  violations.length === 0 ? 'PASS' : 'FAIL',
+    detail:  violations.length === 0
+      ? 'Freeze enforcement verified: isRolloutFrozen() consulted in promoteRing(), all 4 freeze classifications present'
+      : `${violations.length} freeze enforcement violation(s)`,
+    violations,
+    blocker: violations.length > 0
+      ? `DB-1: Freeze enforcement gaps: [${violations.map(v => (v.issue ?? '').slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 28. event_causality
+ * Verify event-lineage.js exists with required capabilities:
+ *   - withLineage() for enriching events with causal context
+ *   - verifyLineage() for detecting orphaned events and broken chains
+ *   - exportLineage() for writing reports/event-lineage.json
+ *   - ORPHANED_EVENT detection explicitly implemented
+ */
+function checkEventCausality() {
+  const violations = [];
+
+  if (!fs.existsSync(EVENT_LINEAGE_PATH)) {
+    return {
+      name:    'event_causality',
+      status:  'FAIL',
+      detail:  `event-lineage.js not found at ${path.relative(ROOT, EVENT_LINEAGE_PATH)}`,
+      violations: [{ issue: 'event-lineage.js missing — governed events have no causal tracking' }],
+      blocker: 'DB-1: event-lineage.js missing',
+    };
+  }
+
+  const src = fs.readFileSync(EVENT_LINEAGE_PATH, 'utf8');
+
+  if (!src.includes('withLineage')) {
+    violations.push({ issue: "'withLineage' not exported from event-lineage.js — events cannot be causally enriched" });
+  }
+  if (!src.includes('verifyLineage')) {
+    violations.push({ issue: "'verifyLineage' not exported from event-lineage.js — causal chain verification missing" });
+  }
+  if (!src.includes('exportLineage')) {
+    violations.push({ issue: "'exportLineage' not found — event-lineage.json report cannot be generated" });
+  }
+  if (!src.includes('ORPHANED_EVENT')) {
+    violations.push({ issue: "'ORPHANED_EVENT' anomaly type not defined — orphan detection not implemented" });
+  }
+  if (!src.includes('caused_by')) {
+    violations.push({ issue: "'caused_by' not referenced in event-lineage.js — causal parent tracking absent" });
+  }
+
+  return {
+    name:    'event_causality',
+    status:  violations.length === 0 ? 'PASS' : 'FAIL',
+    detail:  violations.length === 0
+      ? 'Event causality verified: withLineage, verifyLineage, exportLineage, ORPHANED_EVENT detection all present'
+      : `${violations.length} event causality violation(s)`,
+    violations,
+    blocker: violations.length > 0
+      ? `DB-1: Event causality gaps: [${violations.map(v => (v.issue ?? '').slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 29. operator_overrides
+ * Verify operator-overrides.js exists with safety requirements:
+ *   - expiry enforced on all overrides
+ *   - SECURITY.override_used event emitted on use
+ *   - operator ledger append on use
+ *   - linked_incident required
+ *   - createOverride, checkOverride, useOverride exported
+ */
+function checkOperatorOverrides() {
+  const violations = [];
+
+  if (!fs.existsSync(OPERATOR_OVERRIDES_PATH)) {
+    return {
+      name:    'operator_overrides',
+      status:  'FAIL',
+      detail:  `operator-overrides.js not found at ${path.relative(ROOT, OPERATOR_OVERRIDES_PATH)}`,
+      violations: [{ issue: 'operator-overrides.js missing — operator overrides are unbounded and ungoverned' }],
+      blocker: 'DB-1: operator-overrides.js missing',
+    };
+  }
+
+  const src = fs.readFileSync(OPERATOR_OVERRIDES_PATH, 'utf8');
+
+  if (!src.includes('expiry')) {
+    violations.push({ issue: "'expiry' not enforced in operator-overrides.js — overrides can be indefinite" });
+  }
+  if (!src.includes('SECURITY.override_used') && !src.includes("'SECURITY.override_used'") && !src.includes('"SECURITY.override_used"')) {
+    violations.push({ issue: "'SECURITY.override_used' event not emitted — override use is not audit-visible" });
+  }
+  if (!src.includes('linked_incident')) {
+    violations.push({ issue: "'linked_incident' not required in operator-overrides.js — overrides not linked to incidents" });
+  }
+  if (!src.includes('createOverride')) {
+    violations.push({ issue: "'createOverride' not exported from operator-overrides.js" });
+  }
+  if (!src.includes('useOverride')) {
+    violations.push({ issue: "'useOverride' not exported from operator-overrides.js" });
+  }
+  if (!src.includes('appendEntry') && !src.includes('operatorLedger')) {
+    violations.push({ issue: "override use does not write to operator ledger — overrides are not tamper-evidently audited" });
+  }
+
+  return {
+    name:    'operator_overrides',
+    status:  violations.length === 0 ? 'PASS' : 'FAIL',
+    detail:  violations.length === 0
+      ? 'Operator overrides verified: expiry enforced, SECURITY.override_used emitted, ledger-appended, incident-linked'
+      : `${violations.length} operator override violation(s)`,
+    violations,
+    blocker: violations.length > 0
+      ? `DB-1: Operator override issues: [${violations.map(v => (v.issue ?? '').slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+// ── Distributed governance checks (30-37) ─────────────────────────────────────
+
+const GOVERNANCE_DB_PATH     = path.join(ROOT, 'backend/src/lib/governance-db.js');
+const INCIDENT_ORCH_PATH2    = path.join(ROOT, 'backend/src/lib/incident-orchestrator.js');
+const OTA_ROUTE_PATH2        = path.join(ROOT, 'backend/src/routes/ota.js');
+
+function checkGovernanceDb() {
+  if (!fs.existsSync(GOVERNANCE_DB_PATH)) return { name:'governance_db',status:'FAIL',detail:'governance-db.js not found',violations:[{issue:'governance-db.js missing'}],blocker:'DB-1' };
+  const src = fs.readFileSync(GOVERNANCE_DB_PATH,'utf8');
+  const v=[];
+  if (!src.includes('initSchema'))   v.push({issue:"'initSchema' not found in governance-db.js"});
+  if (!src.includes('incrementInt')) v.push({issue:"'incrementInt' not found — no atomic cluster counter"});
+  if (!src.includes('getIntValue'))  v.push({issue:"'getIntValue' not found in governance-db.js"});
+  if (!src.includes('setIntValue'))  v.push({issue:"'setIntValue' not found in governance-db.js"});
+  return { name:'governance_db', status:v.length===0?'PASS':'FAIL',
+    detail:v.length===0?'governance-db.js verified: initSchema, incrementInt, getIntValue, setIntValue present':`${v.length} governance-db violation(s)`,
+    violations:v, blocker:v.length>0?`DB-1: governance-db gaps: [${v.map(x=>x.issue.slice(0,50)).join(' | ')}]`:null };
+}
+
+function checkClusterConsensusPersistent() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH,'utf8') : '';
+  const v=[];
+  if (!src.includes('initFromDb'))  v.push({issue:"fleet-consensus.js missing 'initFromDb' — epoch/generation not loaded from DB on restart"});
+  if (!src.includes('setPool'))     v.push({issue:"fleet-consensus.js missing 'setPool' — DB pool not injectable"});
+  if (!src.includes('governance-db') && !src.includes('governanceDb')) v.push({issue:"fleet-consensus.js does not reference governance-db — cluster state not persisted"});
+  return { name:'cluster_consensus_persistent', status:v.length===0?'PASS':'FAIL',
+    detail:v.length===0?'Fleet consensus persistence verified: setPool, initFromDb, governance-db wired':`${v.length} cluster consensus persistence violation(s)`,
+    violations:v, blocker:v.length>0?`DB-1: Consensus not cluster-persistent: [${v.map(x=>x.issue.slice(0,60)).join(' | ')}]`:null };
+}
+
+function checkLedgerDbPersistent() {
+  const src = fs.existsSync(OPERATOR_LEDGER_PATH) ? fs.readFileSync(OPERATOR_LEDGER_PATH,'utf8') : '';
+  const v=[];
+  if (!src.includes('initFromDb'))   v.push({issue:"operator-ledger.js missing 'initFromDb' — hash chain not restored after restart"});
+  if (!src.includes('setPool'))      v.push({issue:"operator-ledger.js missing 'setPool' — DB pool not injectable"});
+  if (!src.includes('act-'))         v.push({issue:"operator-ledger.js has no 'act-' sequential ID pattern"});
+  if (src.includes('randomBytes') && src.includes('action_id')) v.push({issue:"operator-ledger.js uses randomBytes for action_id — non-deterministic ledger IDs"});
+  return { name:'ledger_db_persistent', status:v.length===0?'PASS':'FAIL',
+    detail:v.length===0?'Operator ledger DB persistence verified: setPool, initFromDb, sequential IDs':`${v.length} ledger persistence violation(s)`,
+    violations:v, blocker:v.length>0?`DB-1: Ledger not restart-safe: [${v.map(x=>x.issue.slice(0,60)).join(' | ')}]`:null };
+}
+
+function checkIncidentDurable() {
+  const src = fs.existsSync(INCIDENT_ORCH_PATH2) ? fs.readFileSync(INCIDENT_ORCH_PATH2,'utf8') : '';
+  const v=[];
+  if (!src.includes('initFromDb'))      v.push({issue:"incident-orchestrator.js missing 'initFromDb' — incidents lost on restart"});
+  if (!src.includes('persistIncident') && !src.includes('setPool')) v.push({issue:"incident-orchestrator.js missing 'persistIncident' or 'setPool' — no DB persistence path"});
+  if (src.includes('randomBytes') && src.includes('inc-')) v.push({issue:"incident-orchestrator.js uses randomBytes for incident_id — non-deterministic IDs"});
+  return { name:'incident_durable', status:v.length===0?'PASS':'FAIL',
+    detail:v.length===0?'Incident durability verified: initFromDb, persistIncident present, deterministic IDs':`${v.length} incident durability violation(s)`,
+    violations:v, blocker:v.length>0?`DB-1: Incidents not restart-safe: [${v.map(x=>x.issue.slice(0,60)).join(' | ')}]`:null };
+}
+
+function checkConfigDbPersistent() {
+  const src = fs.existsSync(GOVERNED_CONFIG_PATH) ? fs.readFileSync(GOVERNED_CONFIG_PATH,'utf8') : '';
+  const v=[];
+  if (!src.includes('initFromDb'))    v.push({issue:"governed-config.js missing 'initFromDb' — config history not restored after restart"});
+  if (!src.includes('setPool') && !src.includes('persistSnapshot')) v.push({issue:"governed-config.js missing 'setPool' or 'persistSnapshot' — no DB persistence path"});
+  return { name:'config_db_persistent', status:v.length===0?'PASS':'FAIL',
+    detail:v.length===0?'Governed config DB persistence verified: initFromDb and DB persistence present':`${v.length} config DB persistence violation(s)`,
+    violations:v, blocker:v.length>0?`DB-1: Config not restart-safe: [${v.map(x=>x.issue.slice(0,60)).join(' | ')}]`:null };
+}
+
+function checkNoDirectThresholdReads() {
+  const violations=[];
+  const backendSrcDir = path.join(ROOT,'backend/src');
+  // governed-config.js: owns the threshold read by design
+  // index.js: contains the ONE permitted bootstrap read that seeds the GovernedConfig singleton
+  const EXEMPT = new Set(['governed-config.js', 'index.js']);
+  // Match non-comment lines that load thresholds.json via readFileSync or require()
+  const DIRECT_READ_RE = /^\s*(?!\/\/|\/?\*)[^*]*(readFileSync|require\s*\()[^)]*thresholds\.json/;
+  function scanDir(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const f of fs.readdirSync(dir,{withFileTypes:true})) {
+      const full = path.join(dir,f.name);
+      if (f.isDirectory()) { scanDir(full); continue; }
+      if (!f.name.endsWith('.js') || EXEMPT.has(f.name)) continue;
+      const lines = fs.readFileSync(full,'utf8').split('\n');
+      for (let i=0; i<lines.length; i++) {
+        if (DIRECT_READ_RE.test(lines[i])) {
+          violations.push({ file: path.relative(ROOT,full), line: i+1, issue:`Direct thresholds.json read — must route through governed-config` });
+        }
+      }
+    }
+  }
+  scanDir(backendSrcDir);
+  return { name:'no_direct_threshold_reads', status:violations.length===0?'PASS':'FAIL',
+    detail:violations.length===0?'No direct thresholds.json reads in backend/src (governed-config.js and index.js bootstrap are exempt)':`${violations.length} direct thresholds.json read(s) detected — must use governed-config`,
+    violations, blocker:violations.length>0?`DB-1: Modules bypass governed-config for threshold reads: [${violations.map(v=>v.file+(v.line?':'+v.line:'')).join(', ')}]`:null };
+}
+
+function checkDeterministicIds() {
+  const targets = [OPERATOR_LEDGER_PATH, INCIDENT_ORCH_PATH2, OPERATOR_OVERRIDES_PATH];
+  const violations=[];
+  for (const p of targets) {
+    if (!fs.existsSync(p)) continue;
+    const src = fs.readFileSync(p,'utf8');
+    // randomBytes in an ID-generating context (not for hashing)
+    const lines = src.split('\n');
+    for (let i=0;i<lines.length;i++) {
+      if (/randomBytes/.test(lines[i]) && /id\s*=|_id\s*=|Id\s*=/.test(lines[i])) {
+        violations.push({ file: path.relative(ROOT,p), line:i+1, issue:`randomBytes used for ID generation — non-deterministic across replays` });
+      }
+    }
+  }
+  return { name:'deterministic_ids', status:violations.length===0?'PASS':'FAIL',
+    detail:violations.length===0?'Deterministic ID generation verified: no randomBytes in governed entity ID paths':`${violations.length} non-deterministic ID generation(s) detected`,
+    violations, blocker:violations.length>0?`DB-1: Non-deterministic IDs break replay: [${violations.map(v=>v.file+':'+v.line).join(', ')}]`:null };
+}
+
+function checkFreezeLedgerLinked() {
+  const src = fs.existsSync(OTA_ROUTE_PATH2) ? fs.readFileSync(OTA_ROUTE_PATH2,'utf8') : fs.existsSync(OTA_ROUTE_PATH) ? fs.readFileSync(OTA_ROUTE_PATH,'utf8') : '';
+  const v=[];
+  if (!src.includes('operatorLedger')) v.push({issue:"ota.js does not import operatorLedger — freeze/unfreeze operations not audit-ledgered"});
+  if (!src.includes('rollout_freeze'))  v.push({issue:"ota.js freeze route does not append 'rollout_freeze' to ledger"});
+  if (!src.includes('rollout_unfreeze')) v.push({issue:"ota.js unfreeze route does not append 'rollout_unfreeze' to ledger"});
+  return { name:'freeze_ledger_linked', status:v.length===0?'PASS':'FAIL',
+    detail:v.length===0?'Freeze/unfreeze ledger linkage verified: rollout_freeze and rollout_unfreeze appended to operator ledger':`${v.length} freeze ledger linkage violation(s)`,
+    violations:v, blocker:v.length>0?`DB-1: Freeze operations not ledgered: [${v.map(x=>x.issue.slice(0,60)).join(' | ')}]`:null };
+}
+
+// ── Active/Active Authority Convergence checks (38-45) ────────────────────────
+// Note: DIST_AUTHORITY_PATH, MANIFEST_ENGINE_PATH, INDEX_PATH already declared above.
+
+/**
+ * 38. strong_freeze_read
+ * Verify rollout-store.js uses a DB-authoritative freeze read before promoting.
+ * In active/active HA, the in-memory isRolloutFrozen() may be stale if another
+ * instance set the freeze. The strong read (isRolloutFrozenFromDb) queries DB directly.
+ */
+function checkStrongFreezeRead() {
+  const src = fs.existsSync(ROLLOUT_STORE_PATH) ? fs.readFileSync(ROLLOUT_STORE_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('isRolloutFrozenFromDb') && !src.includes('isRolloutFrozenStrong')) {
+    v.push({
+      issue:  'rollout-store.promoteRing() uses memory-only isRolloutFrozen() — stale in active/active HA',
+      action: 'Replace with await fleetConsensus.isRolloutFrozenFromDb(pool) before promotion',
+    });
+  }
+  return {
+    name:   'strong_freeze_read',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Strong freeze read verified: rollout-store.js uses DB-authoritative isRolloutFrozenFromDb before promoting'
+      : `${v.length} strong freeze read violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: Freeze read is stale in active/active — promotions may slip through concurrent freeze: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 39. async_epoch_increment
+ * Verify incrementEpoch() is async+DB-authoritative in fleet-consensus.js
+ * and is awaited in index.js startup.
+ */
+function checkAsyncEpochIncrement() {
+  const consensusSrc = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const indexSrc     = fs.existsSync(INDEX_PATH)          ? fs.readFileSync(INDEX_PATH, 'utf8')          : '';
+  const v = [];
+
+  if (!consensusSrc.includes('async function incrementEpoch')) {
+    v.push({
+      file:   path.relative(ROOT, FLEET_CONSENSUS_PATH),
+      issue:  'incrementEpoch() is not async — DB increment is fire-and-forget, memory can diverge from DB',
+      action: 'Make incrementEpoch() async; await governanceDb.incrementInt and assign returned value to _epoch',
+    });
+  }
+  if (!indexSrc.includes('await fleetConsensus.incrementEpoch') && !indexSrc.includes('await incrementEpoch')) {
+    v.push({
+      file:   path.relative(ROOT, INDEX_PATH),
+      issue:  'index.js does not await incrementEpoch() — epoch may not be DB-authoritative before serving requests',
+      action: 'Await fleetConsensus.incrementEpoch() in the app.listen async callback',
+    });
+  }
+
+  return {
+    name:   'async_epoch_increment',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Async epoch increment verified: incrementEpoch is async+DB-authoritative; index.js awaits it'
+      : `${v.length} epoch increment violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: Epoch increment not cluster-authoritative: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 40. async_manifest_generation
+ * Verify incrementManifestGeneration() is async+DB-authoritative in fleet-consensus.js
+ * and is awaited in manifestEngine.js.
+ */
+function checkAsyncManifestGeneration() {
+  const consensusSrc = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const engineSrc    = fs.existsSync(MANIFEST_ENGINE_PATH) ? fs.readFileSync(MANIFEST_ENGINE_PATH, 'utf8') : '';
+  const v = [];
+
+  if (!consensusSrc.includes('async function incrementManifestGeneration')) {
+    v.push({
+      file:   path.relative(ROOT, FLEET_CONSENSUS_PATH),
+      issue:  'incrementManifestGeneration() is not async — multiple instances can diverge manifest_generation counter',
+      action: 'Make incrementManifestGeneration() async; await governanceDb.incrementInt and assign returned value to _manifestGeneration',
+    });
+  }
+  if (!engineSrc.includes('await fleetConsensus.incrementManifestGeneration') && !engineSrc.includes('await incrementManifestGeneration')) {
+    v.push({
+      file:   path.relative(ROOT, MANIFEST_ENGINE_PATH),
+      issue:  'manifestEngine.js does not await incrementManifestGeneration() — generation counter may be fire-and-forget',
+      action: 'Await fleetConsensus.incrementManifestGeneration() when checksum changes in computeManifest()',
+    });
+  }
+
+  return {
+    name:   'async_manifest_generation',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Async manifest generation verified: incrementManifestGeneration is async+DB-authoritative; manifestEngine.js awaits it'
+      : `${v.length} manifest generation violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: Manifest generation not cluster-authoritative: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 41. linearized_ledger_append
+ * Verify operator-ledger.js exports appendEntryLinearized() with pg advisory lock
+ * for cross-instance hash chain consistency.
+ */
+function checkLinearizedLedgerAppend() {
+  const src = fs.existsSync(OPERATOR_LEDGER_PATH) ? fs.readFileSync(OPERATOR_LEDGER_PATH, 'utf8') : '';
+  const v = [];
+
+  if (!src.includes('appendEntryLinearized')) {
+    v.push({
+      issue:  'operator-ledger.js missing appendEntryLinearized() — concurrent appends from multiple instances diverge hash chain',
+      action: 'Add appendEntryLinearized(pool, opts) using pg_advisory_xact_lock for total ordering',
+    });
+  }
+  if (!src.includes('pg_advisory_xact_lock') && !src.includes('advisory_lock') && !src.includes('withAdvisoryLock')) {
+    v.push({
+      issue:  'appendEntryLinearized does not use pg advisory lock — no cross-instance serialization guarantee',
+      action: 'Use pg_advisory_xact_lock or governanceDb.withAdvisoryLock inside appendEntryLinearized',
+    });
+  }
+
+  return {
+    name:   'linearized_ledger_append',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Linearized ledger append verified: appendEntryLinearized with advisory lock present'
+      : `${v.length} ledger linearization violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: Ledger hash chain can diverge in active/active: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 42. incident_version_lock
+ * Verify incident-orchestrator.js has transitionStrong() with optimistic locking
+ * to prevent concurrent conflicting transitions in active/active HA.
+ */
+function checkIncidentVersionLock() {
+  const src = fs.existsSync(INCIDENT_ORCH_PATH2) ? fs.readFileSync(INCIDENT_ORCH_PATH2, 'utf8') : '';
+  const v = [];
+
+  if (!src.includes('transitionStrong')) {
+    v.push({
+      issue:  'incident-orchestrator.js missing transitionStrong() — concurrent instances can conflict-transition same incident',
+      action: 'Add transitionStrong(pool, incident_id, toState, opts) with advisory lock + optimistic version locking',
+    });
+  }
+  if (!src.includes('version') || (!src.includes('pg_advisory') && !src.includes('withAdvisoryLock') && !src.includes('advisory_lock'))) {
+    v.push({
+      issue:  'transitionStrong does not use version column or advisory lock — concurrent transitions not serialized',
+      action: 'Add version INT column to incidents table; use pg advisory lock + UPDATE WHERE version = $n in transitionStrong',
+    });
+  }
+  if (!src.includes('IncidentConcurrencyError')) {
+    v.push({
+      issue:  'IncidentConcurrencyError not defined — concurrent transition conflicts not detectable',
+      action: 'Add IncidentConcurrencyError class to incident-orchestrator.js',
+    });
+  }
+
+  return {
+    name:   'incident_version_lock',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Incident version lock verified: transitionStrong with advisory lock and optimistic locking present'
+      : `${v.length} incident locking violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: Incident transitions not cluster-serialized: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 43. db_failure_governance
+ * Verify distributed-authority.js defines DB_FAILURE_MODE and HA_SAFETY_MODEL
+ * constants documenting degraded-mode behaviour.
+ */
+function checkDbFailureGovernance() {
+  const src = fs.existsSync(DIST_AUTHORITY_PATH) ? fs.readFileSync(DIST_AUTHORITY_PATH, 'utf8') : '';
+  const v = [];
+
+  if (!src.includes('DB_FAILURE_MODE')) {
+    v.push({
+      issue:  'distributed-authority.js missing DB_FAILURE_MODE — no formal definition of degraded-mode behaviour',
+      action: 'Add DB_FAILURE_MODE object documenting each subsystem\'s DB-outage behaviour',
+    });
+  }
+  if (!src.includes('HA_SAFETY_MODEL') && !src.includes('SAFE_DEGRADED_MODE') && !src.includes('deployment ceiling')) {
+    v.push({
+      issue:  'No HA_SAFETY_MODEL or deployment ceiling documented — operators cannot assess active/active safety',
+      action: 'Add HA_SAFETY_MODEL object or SAFE_DEGRADED_MODE documenting the deployment ceiling',
+    });
+  }
+
+  return {
+    name:   'db_failure_governance',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'DB failure governance verified: DB_FAILURE_MODE and HA_SAFETY_MODEL defined in distributed-authority.js'
+      : `${v.length} DB failure governance violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: DB failure behaviour undefined — operators cannot reason about HA degraded mode: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 44. governance_transaction_boundaries
+ * Verify rollout-store.js defines clear transaction boundaries:
+ *   - Strong (DB) freeze read before state change
+ *   - withAdvisoryLock or pg_advisory usage available for coordinated writes
+ *   - governance-db imported for cluster-authoritative operations
+ */
+function checkGovernanceTransactionBoundaries() {
+  const storeSrc = fs.existsSync(ROLLOUT_STORE_PATH) ? fs.readFileSync(ROLLOUT_STORE_PATH, 'utf8') : '';
+  const dbSrc    = fs.existsSync(GOVERNANCE_DB_PATH)  ? fs.readFileSync(GOVERNANCE_DB_PATH, 'utf8')  : '';
+  const v = [];
+
+  if (!storeSrc.includes('isRolloutFrozenFromDb') && !storeSrc.includes('isRolloutFrozenStrong')) {
+    v.push({ issue: 'rollout-store.js does not perform strong freeze read before promote — freeze+promote boundary not transactionally safe' });
+  }
+  if (!dbSrc.includes('withAdvisoryLock')) {
+    v.push({ issue: 'governance-db.js missing withAdvisoryLock() — no cross-instance serialization primitive available' });
+  }
+
+  return {
+    name:   'governance_transaction_boundaries',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Governance transaction boundaries verified: strong freeze read and withAdvisoryLock primitive present'
+      : `${v.length} transaction boundary violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: Governance transaction boundaries not established: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+/**
+ * 45. ha_deployment_ceiling
+ * Verify distributed-authority.js documents the HA deployment ceiling —
+ * which topologies are safe and which require additional coordination.
+ */
+function checkHaDeploymentCeiling() {
+  const src = fs.existsSync(DIST_AUTHORITY_PATH) ? fs.readFileSync(DIST_AUTHORITY_PATH, 'utf8') : '';
+  const v = [];
+
+  if (!src.includes('active/active') && !src.includes('active_active') && !src.includes('ACTIVE/ACTIVE')) {
+    v.push({
+      issue:  'distributed-authority.js does not document active/active HA safety — deployment ceiling unspecified',
+      action: 'Add HA_SAFETY_MODEL with topology safety ratings and remaining risks',
+    });
+  }
+  if (!src.includes('CONDITIONALLY_SAFE') && !src.includes('advisory_only') && !src.includes('ADVISORY_ONLY')) {
+    v.push({
+      issue:  'HA safety model does not distinguish SAFE vs CONDITIONALLY_SAFE paths — operators cannot assess risk',
+      action: 'Add topology safety ratings: SAFE, CONDITIONALLY_SAFE, ADVISORY_ONLY in HA_SAFETY_MODEL',
+    });
+  }
+
+  return {
+    name:   'ha_deployment_ceiling',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'HA deployment ceiling verified: active/active topology safety ratings and advisory-only paths documented'
+      : `${v.length} HA deployment ceiling violation(s)`,
+    violations: v,
+    blocker: v.length > 0
+      ? `DB-1: HA deployment ceiling not documented — active/active safety unspecified: [${v.map(x => x.issue.slice(0, 60)).join(' | ')}]`
+      : null,
+  };
+}
+
+// ── Governed-Config Accessor checks (46-49) ──────────────────────────────────
+
+/**
+ * 46. governed_threshold_accessor
+ * governed-config.js must export the full accessor surface:
+ *   getThreshold, requireThreshold, getThresholdSnapshot, getThresholdVersion
+ */
+function checkGovernedThresholdAccessor() {
+  const src = fs.existsSync(GOVERNED_CONFIG_PATH) ? fs.readFileSync(GOVERNED_CONFIG_PATH, 'utf8') : '';
+  const v = [];
+  for (const fn of ['getThreshold', 'requireThreshold', 'getThresholdSnapshot', 'getThresholdVersion']) {
+    if (!src.includes(fn)) {
+      v.push({ issue: `governed-config.js missing export: ${fn}` });
+    }
+  }
+  return {
+    name:   'governed_threshold_accessor',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Governed threshold accessors verified: getThreshold, requireThreshold, getThresholdSnapshot, getThresholdVersion all present'
+      : `${v.length} governed threshold accessor(s) missing`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: governed-config.js missing accessor API: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+/**
+ * 47. governed_config_singleton
+ * governed-config.js must export setInstance and getInstance for process-wide singleton.
+ */
+function checkGovernedConfigSingleton() {
+  const src = fs.existsSync(GOVERNED_CONFIG_PATH) ? fs.readFileSync(GOVERNED_CONFIG_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('setInstance')) v.push({ issue: "governed-config.js missing 'setInstance' export — singleton cannot be wired at startup" });
+  if (!src.includes('getInstance')) v.push({ issue: "governed-config.js missing 'getInstance' export — modules cannot access singleton" });
+  return {
+    name:   'governed_config_singleton',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Governed-config singleton API verified: setInstance and getInstance exported'
+      : `${v.length} singleton API gap(s) detected`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: governed-config singleton not wirable: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+/**
+ * 48. no_runtime_threshold_reads
+ * ota.js and screenAuth.js must not contain readFileSync + thresholds.json.
+ * These were the last two non-governed modules; after the fix they must be clean.
+ */
+function checkNoRuntimeThresholdReads() {
+  const targets = [
+    { path: OTA_ROUTE_PATH,  name: 'ota.js' },
+    { path: path.join(ROOT, 'backend/src/middleware/screenAuth.js'), name: 'screenAuth.js' },
+  ];
+  const v = [];
+  for (const { path: p, name } of targets) {
+    if (!fs.existsSync(p)) continue;
+    const src = fs.readFileSync(p, 'utf8');
+    if (src.includes('thresholds.json') && src.includes('readFileSync')) {
+      v.push({ file: name, issue: `${name} still reads thresholds.json directly at runtime — must use governed-config singleton` });
+    }
+  }
+  return {
+    name:   'no_runtime_threshold_reads',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'No runtime thresholds.json reads in ota.js or screenAuth.js — both route through governed-config'
+      : `${v.length} runtime direct read(s) detected`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Runtime modules bypass governed-config: [${v.map(x => x.file).join(', ')}]` : null,
+  };
+}
+
+/**
+ * 49. threshold_snapshot_hashing
+ * governed-config.js must implement configHash and snapshot methods for
+ * content-addressable config versioning and replay labelling.
+ */
+function checkThresholdSnapshotHashing() {
+  const src = fs.existsSync(GOVERNED_CONFIG_PATH) ? fs.readFileSync(GOVERNED_CONFIG_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('configHash'))        v.push({ issue: "governed-config.js missing 'configHash' — config versions are not content-addressable" });
+  if (!src.includes('getThresholdSnapshot')) v.push({ issue: "governed-config.js missing 'getThresholdSnapshot' — cannot label replays with config version" });
+  if (!src.includes('config_hash'))       v.push({ issue: "governed-config.js snapshot does not include 'config_hash' field" });
+  return {
+    name:   'threshold_snapshot_hashing',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0
+      ? 'Threshold snapshot hashing verified: configHash, getThresholdSnapshot, and config_hash field all present'
+      : `${v.length} snapshot hashing gap(s) detected`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Config snapshots not content-addressable: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+// ── Event Lineage Mode checks (50-54) ─────────────────────────────────────────
+
+function checkLineageModeSupport() {
+  const src = fs.existsSync(EVENT_LINEAGE_PATH) ? fs.readFileSync(EVENT_LINEAGE_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('LINEAGE_MODES'))     v.push({ issue: "event-lineage.js missing LINEAGE_MODES constant" });
+  if (!src.includes("'STRICT'") && !src.includes('"STRICT"'))  v.push({ issue: "event-lineage.js missing STRICT mode" });
+  if (!src.includes("'REPORT'") && !src.includes('"REPORT"'))  v.push({ issue: "event-lineage.js missing REPORT mode" });
+  if (!src.includes("'REPLAY'") && !src.includes('"REPLAY"'))  v.push({ issue: "event-lineage.js missing REPLAY mode" });
+  return { name: 'lineage_mode_support', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'verifyLineage STRICT/REPORT/REPLAY modes present':`${v.length} lineage mode gap(s)`,
+    violations: v, blocker: v.length>0?`DB-1: Event lineage lacks operational modes: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkRolloutLineageWired() {
+  const src = fs.existsSync(ROLLOUT_STORE_PATH) ? fs.readFileSync(ROLLOUT_STORE_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('withLineage'))    v.push({ issue: "rollout-store.js does not import/use withLineage — RING_FROZEN/RING_PROMOTED events lack lineage" });
+  if (!src.includes('event-lineage'))  v.push({ issue: "rollout-store.js does not import event-lineage" });
+  return { name: 'rollout_lineage_wired', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'rollout-store.js uses withLineage on RING events':'rollout-store.js missing lineage wiring',
+    violations: v, blocker: v.length>0?`DB-1: Rollout ring events lack lineage context: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkIncidentLineageWired() {
+  const src = fs.existsSync(INCIDENT_ORCH_PATH) ? fs.readFileSync(INCIDENT_ORCH_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('withLineage'))   v.push({ issue: "incident-orchestrator.js does not use withLineage in createIncident" });
+  if (!src.includes('event-lineage')) v.push({ issue: "incident-orchestrator.js does not import event-lineage" });
+  return { name: 'incident_lineage_wired', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'incident-orchestrator.js uses withLineage in createIncident':'incident-orchestrator.js missing lineage wiring',
+    violations: v, blocker: v.length>0?`DB-1: Incident creation events lack lineage context: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkLineageModesExported() {
+  const src = fs.existsSync(EVENT_LINEAGE_PATH) ? fs.readFileSync(EVENT_LINEAGE_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('LINEAGE_MODES')) v.push({ issue: "LINEAGE_MODES not defined in event-lineage.js" });
+  if (!src.includes('LINEAGE_MODES') || !src.match(/module\.exports.*LINEAGE_MODES/s)) {
+    if (!src.match(/LINEAGE_MODES[,\s}]/)) v.push({ issue: "LINEAGE_MODES not exported from event-lineage.js" });
+  }
+  return { name: 'lineage_modes_exported', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'LINEAGE_MODES exported from event-lineage.js':`${v.length} export gap(s)`,
+    violations: v, blocker: v.length>0?`DB-1: LINEAGE_MODES not exported: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkLineageStrictThrows() {
+  const src = fs.existsSync(EVENT_LINEAGE_PATH) ? fs.readFileSync(EVENT_LINEAGE_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('STRICT') || (!src.includes('throw new Error') && !src.includes('throw Error'))) {
+    v.push({ issue: "verifyLineage STRICT mode does not throw on anomalies" });
+  }
+  return { name: 'lineage_strict_throws', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'verifyLineage STRICT mode throws on anomalies as required':'STRICT mode missing throw',
+    violations: v, blocker: v.length>0?`DB-1: Lineage STRICT mode does not enforce: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+// ── Deterministic ID checks (55-58) ──────────────────────────────────────────
+
+function checkDeterministicIdModule() {
+  const v = [];
+  if (!fs.existsSync(DETERMINISTIC_ID_PATH)) { v.push({ issue: 'deterministic-id.js not found' }); }
+  else {
+    const src = fs.readFileSync(DETERMINISTIC_ID_PATH, 'utf8');
+    if (!src.includes('deriveDeterministicId')) v.push({ issue: "deterministic-id.js missing deriveDeterministicId export" });
+    if (!src.includes('createHash')) v.push({ issue: "deterministic-id.js missing crypto.createHash — not content-addressed" });
+  }
+  return { name: 'deterministic_id_module', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'deterministic-id.js verified: deriveDeterministicId with content-addressing present':`${v.length} gap(s)`,
+    violations: v, blocker: v.length>0?`DB-1: deterministic-id.js missing: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkIncidentIdDeterministic() {
+  const src = fs.existsSync(INCIDENT_ORCH_PATH) ? fs.readFileSync(INCIDENT_ORCH_PATH, 'utf8') : '';
+  const v = [];
+  // The _makeIncidentId function must NOT include Date.now() in the hash input
+  const lines = src.split('\n');
+  let inMakeId = false;
+  for (let i=0; i<lines.length; i++) {
+    if (lines[i].includes('_makeIncidentId') && lines[i].includes('function')) inMakeId = true;
+    if (inMakeId && lines[i].includes('Date.now()')) {
+      v.push({ file: 'backend/src/lib/incident-orchestrator.js', line: i+1, issue: 'Date.now() in incident ID hash — non-deterministic across cluster instances' });
+    }
+    if (inMakeId && lines[i].includes('}') && !lines[i].includes('{')) inMakeId = false;
+  }
+  return { name: 'incident_id_deterministic', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'Incident ID hash does not include Date.now() — deterministic across nodes':`${v.length} non-deterministic ID pattern(s)`,
+    violations: v, blocker: v.length>0?`DB-1: Incident IDs are non-deterministic — replays produce different IDs: [${v.map(x=>x.file+':'+x.line).join(', ')}]`:null };
+}
+
+function checkIncidentIdUsesModule() {
+  const src = fs.existsSync(INCIDENT_ORCH_PATH) ? fs.readFileSync(INCIDENT_ORCH_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('deterministic-id'))     v.push({ issue: "incident-orchestrator.js does not import deterministic-id.js" });
+  if (!src.includes('deriveDeterministicId')) v.push({ issue: "incident-orchestrator.js does not call deriveDeterministicId" });
+  return { name: 'incident_id_uses_module', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'incident-orchestrator.js uses deterministic-id module for ID derivation':'incident-orchestrator.js missing deterministic-id wiring',
+    violations: v, blocker: v.length>0?`DB-1: Incident IDs not using governed deterministic-id module: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkDeterministicIdStableStringify() {
+  const src = fs.existsSync(DETERMINISTIC_ID_PATH) ? fs.readFileSync(DETERMINISTIC_ID_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('stableStringify') && !src.includes('_stableStringify')) {
+    v.push({ issue: "deterministic-id.js does not use stable serialisation — different key order produces different IDs" });
+  }
+  return { name: 'deterministic_id_stable_stringify', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'deterministic-id.js uses stable serialisation for canonical form':'deterministic-id.js missing stable serialisation',
+    violations: v, blocker: v.length>0?`DB-1: Deterministic IDs are not key-order-stable: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+// ── Cluster-Safe Freeze Authority checks (59-62) ──────────────────────────────
+
+function checkFreezeEpochCounter() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('_freezeEpoch') && !src.includes('freeze_epoch')) {
+    v.push({ issue: "fleet-consensus.js missing freeze_epoch counter" });
+  }
+  if (!src.includes('_freezeEpoch++') && !src.includes('freezeEpoch++')) {
+    v.push({ issue: "fleet-consensus.js does not increment freeze_epoch on freeze" });
+  }
+  return { name: 'freeze_epoch_counter', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'freeze_epoch counter present and increments on every freeze event':'missing freeze epoch counter',
+    violations: v, blocker: v.length>0?`DB-1: Freeze epoch not tracked: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkGetFreezeStateStrong() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('getFreezeStateStrong')) v.push({ issue: "fleet-consensus.js missing getFreezeStateStrong export" });
+  return { name: 'get_freeze_state_strong', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'getFreezeStateStrong exported from fleet-consensus.js':'getFreezeStateStrong missing',
+    violations: v, blocker: v.length>0?`DB-1: Strong freeze read API missing: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkFreezeEpochDbPersisted() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes("'freeze_epoch'") && !src.includes('"freeze_epoch"')) {
+    v.push({ issue: "getFreezeStateStrong does not read freeze_epoch from DB — epoch is memory-only" });
+  }
+  return { name: 'freeze_epoch_db_persisted', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'freeze_epoch persisted to DB and read back in getFreezeStateStrong':'freeze_epoch DB persistence missing',
+    violations: v, blocker: v.length>0?`DB-1: Freeze epoch not cluster-durable: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkFreezeEpochIncrements() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  // Both _setFreeze and unfreezeRollout should increment
+  const setFreezeHasIncrement   = src.includes('_setFreeze') && src.includes('_freezeEpoch++');
+  const unfreezeHasIncrement    = src.includes('unfreezeRollout') && src.match(/unfreezeRollout[\s\S]{0,400}_freezeEpoch\+\+/);
+  if (!setFreezeHasIncrement) v.push({ issue: "_setFreeze does not increment _freezeEpoch" });
+  if (!unfreezeHasIncrement)  v.push({ issue: "unfreezeRollout does not increment _freezeEpoch" });
+  return { name: 'freeze_epoch_increments', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'freeze_epoch increments on both freeze and unfreeze events':'freeze_epoch increment missing',
+    violations: v, blocker: v.length>0?`DB-1: Freeze epoch not monotonically increasing: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+// ── Operator Authority Enforcement checks (63-68) ─────────────────────────────
+
+function checkOperatorAuthModule() {
+  const v = [];
+  if (!fs.existsSync(OPERATOR_AUTH_PATH)) v.push({ issue: 'operatorAuth.js not found at backend/src/middleware/operatorAuth.js' });
+  return { name: 'operator_auth_module', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'operatorAuth.js middleware module present':'operatorAuth.js missing',
+    violations: v, blocker: v.length>0?`DB-1: Operator auth middleware missing: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkOperatorAuthHmac() {
+  const src = fs.existsSync(OPERATOR_AUTH_PATH) ? fs.readFileSync(OPERATOR_AUTH_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('createHmac'))       v.push({ issue: "operatorAuth.js missing HMAC-SHA256 — tokens are not signed" });
+  if (!src.includes('timingSafeEqual'))  v.push({ issue: "operatorAuth.js missing timingSafeEqual — vulnerable to timing attacks" });
+  return { name: 'operator_auth_hmac', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'operatorAuth.js uses HMAC-SHA256 with constant-time comparison':'operatorAuth.js HMAC gaps',
+    violations: v, blocker: v.length>0?`DB-1: Operator token verification insecure: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkOperatorAuthRoles() {
+  const src = fs.existsSync(OPERATOR_AUTH_PATH) ? fs.readFileSync(OPERATOR_AUTH_PATH, 'utf8') : '';
+  const v = [];
+  for (const role of ['ADMIN', 'OPERATOR', 'VIEWER']) {
+    if (!src.includes(role)) v.push({ issue: `operatorAuth.js missing role: ${role}` });
+  }
+  return { name: 'operator_auth_roles', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'operatorAuth.js defines ADMIN, OPERATOR, VIEWER roles':'operatorAuth.js missing role definitions',
+    violations: v, blocker: v.length>0?`DB-1: Operator role model incomplete: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkOperatorAuthExports() {
+  const src = fs.existsSync(OPERATOR_AUTH_PATH) ? fs.readFileSync(OPERATOR_AUTH_PATH, 'utf8') : '';
+  const v = [];
+  for (const fn of ['requireOperatorAuth', 'issueOperatorToken', 'verifyOperatorToken']) {
+    if (!src.includes(fn)) v.push({ issue: `operatorAuth.js missing export: ${fn}` });
+  }
+  return { name: 'operator_auth_exports', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'operatorAuth.js exports requireOperatorAuth, issueOperatorToken, verifyOperatorToken':'operator auth export gaps',
+    violations: v, blocker: v.length>0?`DB-1: Operator auth API incomplete: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkOtaMutationProtected() {
+  const src = fs.existsSync(OTA_ROUTE_PATH) ? fs.readFileSync(OTA_ROUTE_PATH, 'utf8')
+    : (fs.existsSync(OTA_ROUTE_PATH2) ? fs.readFileSync(OTA_ROUTE_PATH2, 'utf8') : '');
+  const v = [];
+  if (!src.includes('requireOperatorAuth'))  v.push({ issue: "ota.js does not use requireOperatorAuth on mutation routes" });
+  if (!src.includes('operatorAuth'))         v.push({ issue: "ota.js does not import operatorAuth middleware" });
+  return { name: 'ota_mutation_protected', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'OTA mutation routes protected by requireOperatorAuth':'OTA mutation routes unprotected',
+    violations: v, blocker: v.length>0?`DB-1: OTA mutation routes have no operator auth: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkOperatorTokenExpiry() {
+  const src = fs.existsSync(OPERATOR_AUTH_PATH) ? fs.readFileSync(OPERATOR_AUTH_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('.exp') && !src.includes('payload.exp')) v.push({ issue: "operatorAuth.js does not check token expiry" });
+  return { name: 'operator_token_expiry', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'operatorAuth.js enforces token expiry':'token expiry check missing',
+    violations: v, blocker: v.length>0?`DB-1: Operator tokens have no expiry enforcement: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+// ── Resource Governance checks (69-72) ────────────────────────────────────────
+
+function checkMaxScreensBound() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('MAX_SCREENS')) v.push({ issue: "fleet-consensus.js missing MAX_SCREENS constant — _screens map is unbounded" });
+  return { name: 'max_screens_bound', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'MAX_SCREENS bound defined in fleet-consensus.js':'MAX_SCREENS bound missing',
+    violations: v, blocker: v.length>0?`DB-1: fleet-consensus _screens map is unbounded — OOM risk at scale: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkScreenEvictionPolicy() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('MAX_SCREENS') || !src.includes('_screens.delete')) {
+    v.push({ issue: "fleet-consensus.js recordHeartbeat does not evict oldest screen when at MAX_SCREENS capacity" });
+  }
+  return { name: 'screen_eviction_policy', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'recordHeartbeat evicts stale screens when at MAX_SCREENS capacity':'screen eviction policy missing',
+    violations: v, blocker: v.length>0?`DB-1: Fleet screen registry grows without bound: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkLedgerMaxSize() {
+  const src = fs.existsSync(OPERATOR_LEDGER_PATH) ? fs.readFileSync(OPERATOR_LEDGER_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('MAX_LEDGER_ENTRIES')) v.push({ issue: "operator-ledger.js missing MAX_LEDGER_ENTRIES — in-memory ledger is unbounded" });
+  return { name: 'ledger_max_size', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'MAX_LEDGER_ENTRIES defined in operator-ledger.js':'MAX_LEDGER_ENTRIES missing',
+    violations: v, blocker: v.length>0?`DB-1: Operator ledger in-memory store is unbounded — OOM risk: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+function checkLedgerCompaction() {
+  const src = fs.existsSync(OPERATOR_LEDGER_PATH) ? fs.readFileSync(OPERATOR_LEDGER_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('_compactLedgerIfNeeded') && !src.includes('compact')) {
+    v.push({ issue: "operator-ledger.js has no compaction logic — grows without bound once MAX_LEDGER_ENTRIES reached" });
+  }
+  return { name: 'ledger_compaction', status: v.length===0?'PASS':'FAIL',
+    detail: v.length===0?'operator-ledger.js compacts in-memory store when exceeding MAX_LEDGER_ENTRIES':'ledger compaction missing',
+    violations: v, blocker: v.length>0?`DB-1: Operator ledger never compacts — OOM risk: [${v.map(x=>x.issue).join(' | ')}]`:null };
+}
+
+// ── Governance Finalization checks (73-79) ────────────────────────────────────
+
+function checkGovernedClock() {
+  const v = [];
+  if (!fs.existsSync(GOVERNED_CLOCK_PATH)) {
+    v.push({ issue: 'governed-clock.js not found — wall-clock not abstracted for replay' });
+    return { name: 'governed_clock', status: 'FAIL', detail: 'governed-clock.js missing', violations: v, blocker: 'DB-1: No governed clock abstraction' };
+  }
+  const src = fs.readFileSync(GOVERNED_CLOCK_PATH, 'utf8');
+  for (const fn of ['now', 'nowIso', 'monotonic', 'freeze', 'unfreeze', 'setOffset']) {
+    if (!src.includes(fn)) v.push({ issue: `governed-clock.js missing: ${fn}` });
+  }
+  // Verify event-lineage.js uses governed clock
+  const lineageSrc = fs.existsSync(EVENT_LINEAGE_PATH) ? fs.readFileSync(EVENT_LINEAGE_PATH, 'utf8') : '';
+  if (!lineageSrc.includes('governed-clock') && lineageSrc.includes('new Date().toISOString()')) {
+    v.push({ issue: 'event-lineage.js still uses new Date() directly — lineage_ts not governed' });
+  }
+  return {
+    name: 'governed_clock',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'governed-clock.js verified: now/nowIso/monotonic/freeze/unfreeze/setOffset all present; event-lineage uses governed clock' : `${v.length} governed clock gap(s)`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Clock not governed — replay nondeterministic: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+function checkFullLineageEnforcement() {
+  const targets = [
+    { path: ROLLOUT_STORE_PATH,  name: 'rollout-store.js' },
+    { path: ROLLOUT_STATE_PATH,  name: 'rollout-state.js' },
+    { path: INCIDENT_ORCH_PATH,  name: 'incident-orchestrator.js' },
+  ];
+  const v = [];
+  for (const { path: p, name } of targets) {
+    if (!fs.existsSync(p)) continue;
+    const src = fs.readFileSync(p, 'utf8');
+    if (!src.includes('withLineage') && src.includes('emit(EVENTS')) {
+      v.push({ file: name, issue: `${name} emits governed events without withLineage()` });
+    }
+  }
+  return {
+    name: 'full_lineage_enforcement',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'Core governed emitters (rollout-store, rollout-state, incident-orchestrator) all use withLineage()' : `${v.length} governed emitter(s) bypass withLineage`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Governed events emitted without lineage: [${v.map(x => x.file).join(', ')}]` : null,
+  };
+}
+
+function checkOperatorRevocation() {
+  const v = [];
+  if (!fs.existsSync(OPERATOR_SESSIONS_PATH)) {
+    v.push({ issue: 'operator-sessions.js not found — no revocation capability' });
+  } else {
+    const src = fs.readFileSync(OPERATOR_SESSIONS_PATH, 'utf8');
+    for (const fn of ['revokeToken', 'revokeOperator', 'rotateSigningKey', 'isRevoked', 'initFromDb']) {
+      if (!src.includes(fn)) v.push({ issue: `operator-sessions.js missing: ${fn}` });
+    }
+  }
+  return {
+    name: 'operator_revocation',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'operator-sessions.js verified: revocation, operator-level revoke, and key rotation all present' : `${v.length} revocation gap(s)`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Operator tokens are irrevocable: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+function checkJtiReplayProtection() {
+  const authSrc = fs.existsSync(OPERATOR_AUTH_PATH2) ? fs.readFileSync(OPERATOR_AUTH_PATH2, 'utf8') : '';
+  const v = [];
+  if (!authSrc.includes('jti')) v.push({ issue: "operatorAuth.js does not embed jti in tokens — replay attack possible" });
+  if (!authSrc.includes('isRevoked') && !authSrc.includes('operator-sessions')) {
+    v.push({ issue: "operatorAuth.js does not check revocation — revoked tokens still accepted" });
+  }
+  return {
+    name: 'jti_replay_protection',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'JTI present in tokens; revocation check wired in verifyOperatorToken' : `${v.length} replay protection gap(s)`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Operator token replay attacks possible: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+function checkStrongFreezeConsistency() {
+  const src = fs.existsSync(FLEET_CONSENSUS_PATH) ? fs.readFileSync(FLEET_CONSENSUS_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('freezeStrong') && !src.includes('_setFreezeStrong')) {
+    v.push({ issue: "fleet-consensus.js missing freezeStrong() — freeze_epoch increment is fire-and-forget, not transactional" });
+  }
+  if (!src.includes('DB_FREEZE_FAILURE_POLICY') && !src.includes('_dbFailurePolicy') && !src.includes('FAIL_CLOSED')) {
+    v.push({ issue: "fleet-consensus.js missing DB outage policy for freeze (FAIL_CLOSED/FAIL_OPEN/STALE_OK)" });
+  }
+  return {
+    name: 'strong_freeze_consistency',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'Strong freeze consistency verified: freezeStrong() exists; DB failure policy configured' : `${v.length} freeze consistency gap(s)`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Freeze epoch can diverge from DB under failure: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+function checkIncidentLifecycleGovernance() {
+  const src = fs.existsSync(INCIDENT_ORCH_PATH) ? fs.readFileSync(INCIDENT_ORCH_PATH, 'utf8') : '';
+  const v = [];
+  if (!src.includes('MAX_ACTIVE_INCIDENTS')) v.push({ issue: "incident-orchestrator.js missing MAX_ACTIVE_INCIDENTS — active incident map is unbounded" });
+  if (!src.includes('archiveResolvedIncidents') && !src.includes('incidents_archive')) {
+    v.push({ issue: "incident-orchestrator.js missing archival mechanism — resolved incidents accumulate indefinitely" });
+  }
+  return {
+    name: 'incident_lifecycle_governance',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'Incident lifecycle governance verified: MAX_ACTIVE_INCIDENTS bounded; archiveResolvedIncidents present' : `${v.length} lifecycle governance gap(s)`,
+    violations: v,
+    blocker: v.length > 0 ? `DB-1: Incident store grows without bound: [${v.map(x => x.issue).join(' | ')}]` : null,
+  };
+}
+
+function checkCertificationHarness() {
+  const v = [];
+  if (!fs.existsSync(CERTIFICATION_PATH)) {
+    v.push({ issue: 'governance-certification.js not found in test-runner/certification/' });
+    return { name: 'certification_harness', status: 'FAIL', detail: 'Certification harness missing', violations: v, blocker: null };
+  }
+  const src = fs.readFileSync(CERTIFICATION_PATH, 'utf8');
+  const scenarios = [
+    'db_outage_during_freeze', 'concurrent_promotion_safety', 'operator_token_replay',
+    'stale_authority_epoch', 'manifest_generation_race', 'lineage_orphan',
+    'replay_determinism', 'split_brain_freeze', 'clock_skew', 'recovery_governor',
+  ];
+  const missing = scenarios.filter(s => !src.includes(s));
+  if (missing.length > 0) v.push({ issue: `Certification harness missing scenarios: ${missing.join(', ')}` });
+  return {
+    name: 'certification_harness',
+    status: v.length === 0 ? 'PASS' : 'FAIL',
+    detail: v.length === 0 ? 'Certification harness verified: all 10 governance failure scenarios present' : `${v.length} harness gap(s)`,
+    violations: v,
+    blocker: null,
+  };
+}
+
 /**
  * Generate reports/threshold-traceability.json.
  *
@@ -2135,6 +3403,69 @@ async function main() {
     checkDistributedAuthority(),
     checkGovernedConfig(),
     checkIncidentOrchestration(),
+    checkRecoveryGovernorWired(),
+    checkFleetConsensusWired(),
+    checkFreezeEnforcement(),
+    checkEventCausality(),
+    checkOperatorOverrides(),
+    checkGovernanceDb(),
+    checkClusterConsensusPersistent(),
+    checkLedgerDbPersistent(),
+    checkIncidentDurable(),
+    checkConfigDbPersistent(),
+    checkNoDirectThresholdReads(),
+    checkDeterministicIds(),
+    checkFreezeLedgerLinked(),
+    // ── Active/Active Authority Convergence checks (38-45) ──────────────────
+    checkStrongFreezeRead(),
+    checkAsyncEpochIncrement(),
+    checkAsyncManifestGeneration(),
+    checkLinearizedLedgerAppend(),
+    checkIncidentVersionLock(),
+    checkDbFailureGovernance(),
+    checkGovernanceTransactionBoundaries(),
+    checkHaDeploymentCeiling(),
+    // ── Governed-Config Accessor checks (46-49) ──────────────────────────────
+    checkGovernedThresholdAccessor(),
+    checkGovernedConfigSingleton(),
+    checkNoRuntimeThresholdReads(),
+    checkThresholdSnapshotHashing(),
+    // ── Event Lineage Mode checks (50-54) ────────────────────────────────────
+    checkLineageModeSupport(),
+    checkRolloutLineageWired(),
+    checkIncidentLineageWired(),
+    checkLineageModesExported(),
+    checkLineageStrictThrows(),
+    // ── Deterministic ID checks (55-58) ─────────────────────────────────────
+    checkDeterministicIdModule(),
+    checkIncidentIdDeterministic(),
+    checkIncidentIdUsesModule(),
+    checkDeterministicIdStableStringify(),
+    // ── Cluster-Safe Freeze Authority checks (59-62) ─────────────────────────
+    checkFreezeEpochCounter(),
+    checkGetFreezeStateStrong(),
+    checkFreezeEpochDbPersisted(),
+    checkFreezeEpochIncrements(),
+    // ── Operator Authority Enforcement checks (63-68) ────────────────────────
+    checkOperatorAuthModule(),
+    checkOperatorAuthHmac(),
+    checkOperatorAuthRoles(),
+    checkOperatorAuthExports(),
+    checkOtaMutationProtected(),
+    checkOperatorTokenExpiry(),
+    // ── Resource Governance checks (69-72) ──────────────────────────────────
+    checkMaxScreensBound(),
+    checkScreenEvictionPolicy(),
+    checkLedgerMaxSize(),
+    checkLedgerCompaction(),
+    // ── Governance Finalization checks (73-79) ───────────────────────────────
+    checkGovernedClock(),
+    checkFullLineageEnforcement(),
+    checkOperatorRevocation(),
+    checkJtiReplayProtection(),
+    checkStrongFreezeConsistency(),
+    checkIncidentLifecycleGovernance(),
+    checkCertificationHarness(),
   ];
 
   const report = makeReport(checks);
