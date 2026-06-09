@@ -2,9 +2,9 @@
  * Venue Dashboard — screens and health data for a single venue.
  * Phase 2: real screen list with heartbeat fields from migrate_005.
  *
- * Data gaps handled honestly (FP-06):
- *  - last_corpus_sync_at does not exist in the schema (no migration).
- *    last_seen_at is used as a "last contact" proxy — it is not corpus-specific.
+ * Data:
+ *  - last_corpus_sync_at added in migrate_006 — used for the real 72h autonomy clock.
+ *    last_seen_at is still shown as "Last Contact" (general heartbeat).
  *  - content_readiness_state is VARCHAR(20) set by the player heartbeat;
  *    RECOVERED_BUT_UNTRUSTED is a valid player-reported value, rendered as a
  *    distinct badge.
@@ -27,6 +27,7 @@ interface Screen {
   name: string | null;
   screen_group: string | null;
   last_seen_at: string | null;
+  last_corpus_sync_at: string | null;
   created_at: string;
   assets_required_count: number | null;
   assets_verified_count: number | null;
@@ -119,12 +120,11 @@ function AssetRatio({
 }
 
 /* ------------------------------------------------------------------ *
- * Autonomy clock
- * last_corpus_sync_at does not exist — uses last_seen_at as proxy.
+ * Autonomy clock — driven by last_corpus_sync_at (migrate_006).
  * ------------------------------------------------------------------ */
 
-function AutonomyClock({ lastSeenAt }: { lastSeenAt: string | null }): JSX.Element {
-  const hours = hoursSinceContact(lastSeenAt);
+function AutonomyClock({ lastCorpusSyncAt }: { lastCorpusSyncAt: string | null }): JSX.Element {
+  const hours = hoursSinceContact(lastCorpusSyncAt);
 
   if (hours === null) {
     return <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.78rem' }}>unavailable</span>;
@@ -142,7 +142,7 @@ function AutonomyClock({ lastSeenAt }: { lastSeenAt: string | null }): JSX.Eleme
 
   return (
     <div style={{ fontSize: '0.78rem', color: colour }}>
-      <div>{formatRelativeTime(lastSeenAt)}</div>
+      <div>{formatRelativeTime(lastCorpusSyncAt)}</div>
       {isOffline && (
         <div style={{ marginTop: '0.1rem', fontSize: '0.7rem' }}>
           {isExpired
@@ -159,7 +159,7 @@ function AutonomyClock({ lastSeenAt }: { lastSeenAt: string | null }): JSX.Eleme
  * ------------------------------------------------------------------ */
 
 function ScreenRow({ screen }: { screen: Screen }): JSX.Element {
-  const hours = hoursSinceContact(screen.last_seen_at);
+  const hours = hoursSinceContact(screen.last_corpus_sync_at);
   const isExpiredAutonomy = hours !== null && hours > AUTONOMY_WINDOW_HOURS;
 
   return (
@@ -179,7 +179,7 @@ function ScreenRow({ screen }: { screen: Screen }): JSX.Element {
         )}
       </td>
       <td style={tdStyle}>
-        <AutonomyClock lastSeenAt={screen.last_seen_at} />
+        <AutonomyClock lastCorpusSyncAt={screen.last_corpus_sync_at} />
       </td>
       <td style={tdStyle}>
         <ReadinessBadge state={screen.content_readiness_state} />
@@ -244,7 +244,7 @@ export function Component(): JSX.Element {
     (s) => s.content_readiness_state === 'RECOVERED_BUT_UNTRUSTED',
   ).length ?? 0;
   const expiredAutonomyCount = screens?.filter((s) => {
-    const h = hoursSinceContact(s.last_seen_at);
+    const h = hoursSinceContact(s.last_corpus_sync_at);
     return h !== null && h > AUTONOMY_WINDOW_HOURS;
   }).length ?? 0;
 
@@ -305,9 +305,7 @@ export function Component(): JSX.Element {
               <thead>
                 <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                   <th style={thStyle}>Screen</th>
-                  <th style={thStyle} title="Based on last_seen_at — last_corpus_sync_at not in schema">
-                    Last Contact ↕
-                  </th>
+                  <th style={thStyle}>72h Autonomy Clock</th>
                   <th style={thStyle}>Content Readiness</th>
                   <th style={thStyle}>Assets (verified/required)</th>
                 </tr>
@@ -318,10 +316,6 @@ export function Component(): JSX.Element {
                 ))}
               </tbody>
             </table>
-            <p style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#9ca3af' }}>
-              Last Contact uses <code>last_seen_at</code> (heartbeat). 72h autonomy clock requires{' '}
-              <code>last_corpus_sync_at</code> — not yet in schema.
-            </p>
           </div>
         )}
       </section>

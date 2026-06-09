@@ -59,19 +59,22 @@ router.patch('/:id/heartbeat', async (req, res) => {
       assets_required_count,
       assets_verified_count,
       content_readiness_state,
+      last_corpus_sync_at,
     } = req.body || {};
     await pool.query(
       `UPDATE screens
        SET last_seen_at             = NOW(),
            assets_required_count   = COALESCE($2, assets_required_count),
            assets_verified_count   = COALESCE($3, assets_verified_count),
-           content_readiness_state = COALESCE($4, content_readiness_state)
+           content_readiness_state = COALESCE($4, content_readiness_state),
+           last_corpus_sync_at     = COALESCE($5, last_corpus_sync_at)
        WHERE id = $1`,
       [
         req.params.id,
-        assets_required_count   ?? null,
-        assets_verified_count   ?? null,
+        assets_required_count ?? null,
+        assets_verified_count ?? null,
         content_readiness_state ?? null,
+        last_corpus_sync_at ?? null,
       ]
     );
     res.json({ ok: true });
