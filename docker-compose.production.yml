@@ -1,0 +1,164 @@
+# ClubHub TV — Production Docker Compose
+#
+# Usage:
+#   cp .env.production.example .env.production
+#   # Edit .env.production: set DOMAIN, DB_PASSWORD, SECRET_KEY
+#   docker compose -f docker-compose.production.yml up -d
+#
+# Environment variables required (set in .env.production):
+#   DOMAIN          — your server's domain name, e.g. clubhub.example.com
+#                     Use 'localhost' for LAN-only deployments (disables HTTPS)
+#   DB_PASSWORD     — strong password for the postgres user (min 20 chars recommended)
+#   SECRET_KEY      — random secret for future signed tokens (openssl rand -hex 32)
+#   LOG_LEVEL       — DEBUG | INFO | WARN | ERROR (default: INFO)
+#
+# This file intentionally does NOT expose postgres or backend ports to the host.
+# All external traffic flows through Caddy on ports 80 and 443.
+
+networks:
+  internal:
+    driver: bridge
+    internal: true    # postgres + backend are not reachable from outside Docker
+  proxy:
+    driver: bridge    # caddy lives here, bridges internal → internet
+
+volumes:
+  pgdata:
+    driver: local
+  uploads:
+    driver: local
+  caddy_data:        # Let's Encrypt certificates + Caddy state
+    driver: local
+  caddy_config:
+    driver: local
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      POSTGRES_USER:     clubhub
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB:       clubhub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./backend/db/migrate_001.sql:/docker-entrypoint-initdb.d/02-migrate_001.sql
+      - ./backend/db/migrate_002.sql:/docker-entrypoint-initdb.d/03-migrate_002.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clubhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ── PgBouncer — connection pool proxy ──────────────────────────────────────
+  # Sits between backend and postgres. Limits postgres to 40 server connections
+  # regardless of how many backend instances or concurrent requests exist.
+  # Pool mode: transaction — connection released after each query.
+  # FAILURE MODEL: if pgbouncer crashes, backend loses DB access. Docker
+  # restart policy recovers in <5s. Postgres remains unaffected.
+  pgbouncer:
+    image: edoburu/pgbouncer:1.22.1
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      PGBOUNCER_ADMIN_PASSWORD: ${PGBOUNCER_ADMIN_PASSWORD:?PGBOUNCER_ADMIN_PASSWORD is required}
+    volumes:
+      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini.template:ro
+      - ./docker/pgbouncer/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U clubhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Backend ─────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - internal
+      - proxy
+    environment:
+      # Route through PgBouncer, not postgres directly.
+      # PgBouncer limits postgres to DB_POOL_MAX server connections.
+      DATABASE_URL: postgres://clubhub:${DB_PASSWORD:?DB_PASSWORD is required}@pgbouncer:5432/clubhub
+      PORT:         4000
+      UPLOAD_DIR:   /app/uploads
+      LOG_LEVEL:    ${LOG_LEVEL:-INFO}
+      SECRET_KEY:   ${SECRET_KEY:-change_me_in_production}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health/live | grep -q '\"status\":\"ok\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ── Caddy reverse proxy (HTTPS + HTTP→HTTPS redirect) ───────────────────────
+  # Auto-provisions a Let's Encrypt TLS certificate for $DOMAIN.
+  # For local/LAN deployments set DOMAIN=localhost — Caddy will serve plain HTTP.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    networks:
+      - proxy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - uploads:/srv/uploads:ro   # serve uploaded assets directly (bypasses backend)
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:2019/metrics || true"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

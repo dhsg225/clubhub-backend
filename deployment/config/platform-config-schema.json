@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PlatformRuntimeConfig",
+  "type": "object",
+  "required": ["kernel", "control_plane"],
+  "properties": {
+    "kernel": {
+      "type": "object",
+      "required": ["ha_mode"],
+      "properties": {
+        "ha_mode":            { "type": "string", "enum": ["SINGLE","ACTIVE_ACTIVE"] },
+        "db_pool_size":       { "type": "integer", "minimum": 1 },
+        "consistency_default":{ "type": "string" }
+      }
+    },
+    "control_plane": {
+      "type": "object",
+      "required": ["auth_enabled"],
+      "properties": {
+        "auth_enabled":       { "type": "boolean" },
+        "rate_limit_per_min": { "type": "integer" },
+        "port":               { "type": "integer" }
+      }
+    },
+    "tenant_defaults": {
+      "type": "object",
+      "properties": {
+        "max_workflows_per_hour": { "type": "integer" },
+        "max_replays_per_day":    { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,113 @@
+# ClubHub TV — Backend Pipeline Integration Test
+#
+# SCREEN_ID flow: integration-test enrolls as step [3] → writes /shared/screen_id
+#                 player-runtime polls /shared/screen_id in its entrypoint (waits up to 60s)
+#
+# Single source of truth: one enrolled screen_id across both services.
+# No separate screen-init service — enrollment is step [3] of integration-test.
+#
+# Usage: docker compose -f docker-compose.integration.yml up --build --abort-on-container-exit
+# Exit 0 = GREEN, Exit 1 = RED
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: clubhub_app
+      POSTGRES_PASSWORD: integration_test_pw
+      POSTGRES_DB: clubhub_integration
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clubhub_app -d clubhub_integration"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  cms-api:
+    build:
+      context: .
+      dockerfile: services/cms-api/Dockerfile
+    command: ["sh", "-c", "node dist/db/migration-runner.js && node dist/db/seed.js && node dist/index.js"]
+    environment:
+      PORT: "3001"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: clubhub_integration
+      DB_USER: clubhub_app
+      DB_PASSWORD: integration_test_pw
+      JWT_VERIFY: "false"
+      NODE_ENV: test
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  player-runtime:
+    build:
+      context: .
+      dockerfile: player-runtime/Dockerfile
+    # Poll for /shared/screen_id written by integration-test step [3] (enrollment).
+    # Waits up to 60s before giving up.
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+      - "i=0; until [ -f /shared/screen_id ] || [ $i -ge 60 ]; do sleep 1; i=$((i+1)); done; [ -f /shared/screen_id ] || { echo '[player-runtime] FATAL: screen_id not written after 60s'; exit 1; }; export SCREEN_ID=$(cat /shared/screen_id) && export VENUE_ID=$(cat /shared/venue_id) && exec node dist/index.js"
+    volumes:
+      - shared-state:/shared
+    environment:
+      CMS_API_URL: "http://cms-api:3001"
+      CORPUS_POLL_INTERVAL_MS: "5000"
+      HEARTBEAT_INTERVAL_MS: "10000"
+      WEBSOCKET_PORT: "7777"
+      CORPUS_CACHE_DIR: /tmp/clubhub/corpus
+      REPLAY_CACHE_DIR: /tmp/clubhub/replay
+      ASSET_DIR: /tmp/clubhub/assets
+      NODE_ENV: test
+    depends_on:
+      cms-api:
+        condition: service_healthy
+    expose:
+      - "7777"
+
+  # Serves real asset files inside the compose network so asset_path in
+  # PLAYLIST_UPDATE resolves to an actual HTTP 200. Eliminates fake CDN URLs.
+  asset-server:
+    image: nginx:alpine
+    command:
+      - "/bin/sh"
+      - "-c"
+      - "mkdir -p /usr/share/nginx/html/assets && printf 'CLUBHUB_TEST_ASSET' > /usr/share/nginx/html/assets/test.mp4 && nginx -g 'daemon off;'"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/assets/test.mp4 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  integration-test:
+    build:
+      context: ./integration-harness
+    volumes:
+      - shared-state:/shared
+    environment:
+      CMS_API_URL: "http://cms-api:3001"
+      WS_URL: "ws://player-runtime:7777"
+      ENTERPRISE_ID: "20000000-0000-0000-0000-000000000001"
+      VENUE_ID: "40000000-0000-0000-0000-000000000001"
+      SHARED_DIR: /shared
+    depends_on:
+      player-runtime:
+        condition: service_started
+      asset-server:
+        condition: service_healthy
+
+volumes:
+  shared-state:

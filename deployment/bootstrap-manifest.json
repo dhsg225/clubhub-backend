@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "platform": "clubhub-governance",
+  "phase": "A10",
+  "startup_order": [
+    { "id": "kernel",         "label": "Governance Kernel",    "required": true,  "health_check": "/health/kernel" },
+    { "id": "trace_store",    "label": "Trace Store",          "required": false, "health_check": "/health/trace_store" },
+    { "id": "sdk",            "label": "Governance SDK",       "required": true,  "health_check": "/health/sdk" },
+    { "id": "ota_runtime",    "label": "OTA Runtime",          "required": false, "health_check": "/health/ota_runtime" },
+    { "id": "agent_runtime",  "label": "Agent Runtime",        "required": false, "health_check": "/health/agent_runtime" },
+    { "id": "orchestration",  "label": "AI Orchestration",     "required": false, "health_check": "/health/orchestration" },
+    { "id": "simulation",     "label": "Simulation Runtime",   "required": false, "health_check": "/health/simulation" },
+    { "id": "operator_ui",    "label": "Operator UI",          "required": false, "health_check": "/health/operator_ui" },
+    { "id": "control_plane",  "label": "Control Plane",        "required": true,  "health_check": "/health/control_plane" },
+    { "id": "admin_runtime",  "label": "Admin Runtime",        "required": false, "health_check": "/health/admin" }
+  ],
+  "shutdown_order": "reverse_of_startup",
+  "certifications_required_before_active": ["a9"],
+  "health_check_timeout_ms": 5000,
+  "startup_timeout_ms": 30000
+}

@@ -1,0 +1,81 @@
+name: Deployment Gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      canary_stage:
+        description: 'Canary stage to advance to (production only)'
+        required: false
+        type: choice
+        options:
+          - SHADOW_ONLY
+          - INTERNAL_CANARY
+          - SINGLE_VENUE
+          - MULTI_VENUE
+          - FLEET_WIDE
+          - AUTHORITATIVE
+      authorization_token:
+        description: 'Human authorization token (required for production canary advancement)'
+        required: false
+        type: string
+
+jobs:
+  validate-gates:
+    name: Pre-Deployment Gate Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Validate canary gate
+        if: inputs.environment == 'production'
+        env:
+          CANARY_STAGE: ${{ inputs.canary_stage }}
+          AUTHORIZATION_TOKEN: ${{ inputs.authorization_token }}
+        run: npx tsx ci/scripts/canary-gate.ts
+      - name: Validate all constitutional contracts
+        run: pnpm constitutional:check
+      - name: Validate migrations
+        run: npx tsx ci/scripts/migration-lint.ts
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [validate-gates]
+    if: inputs.environment == 'staging'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging..."
+          # kubectl apply -k infra/k8s/overlays/staging
+          # Run post-deployment verification
+          npx tsx ci/scripts/deployment-verify.ts staging
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [validate-gates]
+    if: inputs.environment == 'production'
+    environment: production  # Requires GitHub environment protection rules
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production canary stage: ${{ inputs.canary_stage }}"
+          # kubectl apply -k infra/k8s/overlays/production
+          npx tsx ci/scripts/deployment-verify.ts production

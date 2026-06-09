@@ -1,0 +1,117 @@
+##############################################################################
+#  ClubHub TV — Local Development Simulation Stack
+#
+#  Extends the production stack with a fake Pi fleet container.
+#  Use this instead of docker-compose.yml during simulation testing.
+#
+#  Host ports:
+#    4000  → backend
+#    5433  → postgres (avoids conflict with any local postgres on 5432)
+#    3100  → fake-pi-fleet management API
+#
+#  Usage (see Makefile for convenience wrappers):
+#    SCREENS=5  docker compose -f docker-compose.dev-sim.yml up
+#    SCREENS=20 docker compose -f docker-compose.dev-sim.yml up -d
+#
+##############################################################################
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER:     clubhub
+      POSTGRES_PASSWORD: clubhub
+      POSTGRES_DB:       clubhub
+    ports:
+      - "5433:5432"          # 5433 on host to avoid conflict with local postgres
+    volumes:
+      - pgdata_sim:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test:     ["CMD-SHELL", "pg_isready -U clubhub"]
+      interval: 5s
+      timeout:  5s
+      retries:  10
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    restart: unless-stopped
+
+  # ── Backend ──────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgres://clubhub:clubhub@postgres:5432/clubhub
+      PORT:         4000
+      UPLOAD_DIR:   /app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_sim:/app/uploads
+    healthcheck:
+      test:     ["CMD-SHELL", "wget -qO- http://localhost:4000/health | grep -q '\"status\":\"ok\"'"]
+      interval: 10s
+      timeout:  5s
+      retries:  6
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    restart: unless-stopped
+
+  # ── DB migration runner (runs once, then exits) ───────────────────────────
+  migrate:
+    image: postgres:15-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: clubhub
+    volumes:
+      - ./backend/db:/migrations:ro
+    command: >
+      sh -c "
+        psql -h postgres -U clubhub -d clubhub -f /migrations/migrate_001.sql &&
+        psql -h postgres -U clubhub -d clubhub -f /migrations/migrate_002.sql &&
+        echo 'Migrations applied successfully'
+      "
+    restart: "no"
+
+  # ── Fake Pi Fleet ──────────────────────────────────────────────────────────
+  fake-pi-fleet:
+    build:
+      context:    ./simulator
+      dockerfile: Dockerfile
+    ports:
+      - "3100:3100"          # Management API
+    environment:
+      BACKEND_URL:   http://backend:4000
+      SCREEN_COUNT:  ${SCREENS:-5}
+      SCREEN_PREFIX: sim-screen
+      VENUE_ID:      venue-1
+      REBOOT_PROB:   ${REBOOT_PROB:-0.005}
+      STATUS_PORT:   3100
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+    restart: unless-stopped
+
+volumes:
+  pgdata_sim:
+  uploads_sim:

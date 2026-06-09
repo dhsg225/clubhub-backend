@@ -1,0 +1,29 @@
+{
+  "recovery": {
+    "backend_restart_ms": 30000,
+    "db_restart_ms": 60000,
+    "network_outage_recovery_ms": 15000
+  },
+  "performance": {
+    "max_p95_latency_ms": 500,
+    "min_poll_success_rate": 98.0,
+    "max_poll_drift_ms": 5000
+  },
+  "coherence": {
+    "max_desync_count": 0,
+    "max_desync_duration_ms": 45000
+  },
+  "ota": {
+    "ring1_max_pct": 30,
+    "ring2_max_pct": 70,
+    "min_fleet_success_rate": 80,
+    "observation_window_ms": 300000,
+    "rollback_window_ms": 3600000
+  },
+  "security": {
+    "session_token_expiry_ms": 86400000,
+    "token_refresh_window_ms": 3600000,
+    "max_failed_enrollments": 5,
+    "enrollment_token_expiry_ms": 2592000000
+  }
+}

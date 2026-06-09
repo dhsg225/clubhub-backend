@@ -1,0 +1,14 @@
+{
+  "name": "clubhub-simulator",
+  "version": "1.0.0",
+  "description": "ClubHub TV local Pi fleet simulator",
+  "main": "fake-pi.js",
+  "scripts": {
+    "start": "node fake-pi.js",
+    "seed": "node seed.js",
+    "watch": "node watch.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

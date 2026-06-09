@@ -1,0 +1,26 @@
+{
+  "name": "@clubhub/pre-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/packages/pre-engine/src/index.js",
+      "types": "./dist/packages/pre-engine/src/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "constitutional:boundary": "tsx ../../scripts/system-integrity/constitutional-boundary-check.ts --target packages/pre-engine/src"
+  },
+  "dependencies": {
+    "@clubhub/pre-types": "workspace:*",
+    "@clubhub/fnv-checksum": "workspace:*",
+    "@clubhub/corpus-schema": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

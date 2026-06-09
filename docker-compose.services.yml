@@ -1,0 +1,167 @@
+# ClubHub TV — Full Services Stack (development)
+#
+# Starts all 6 HTTP microservices + shared postgres.
+# Gate: run integration test first to verify cms-api pipeline is healthy:
+#   docker compose -f docker-compose.integration.yml up --build --abort-on-container-exit
+#
+# Then start this stack:
+#   docker compose -f docker-compose.services.yml up --build
+#
+# Health checks: GET /health/live on each service
+# Ports: postgres:5432  cms-api:3001  replay:3003  entropy:3004  shadow:3005  audit:3006  gateway:3000
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: clubhub_app
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: clubhub_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clubhub_app -d clubhub_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  cms-api:
+    build:
+      context: .
+      dockerfile: services/cms-api/Dockerfile
+    command: ["sh", "-c", "node dist/db/migration-runner.js && node dist/db/seed.js && node dist/index.js"]
+    environment:
+      PORT: "3001"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: clubhub_dev
+      DB_USER: clubhub_app
+      DB_PASSWORD: dev_password
+      JWT_VERIFY: "false"
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  replay-service:
+    build:
+      context: .
+      dockerfile: services/replay-service/Dockerfile
+    environment:
+      PORT: "3003"
+      DATABASE_URL: postgres://clubhub_app:dev_password@postgres:5432/clubhub_dev
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3003:3003"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  entropy-service:
+    build:
+      context: .
+      dockerfile: services/entropy-service/Dockerfile
+    environment:
+      PORT: "3004"
+      DATABASE_URL: postgres://clubhub_app:dev_password@postgres:5432/clubhub_dev
+      NODE_ENV: development
+      VENUE_SCAN_INTERVAL_MS: "3600000"
+      FLEET_SCAN_INTERVAL_MS: "21600000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3004:3004"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3004/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  shadow-service:
+    build:
+      context: .
+      dockerfile: services/shadow-service/Dockerfile
+    environment:
+      PORT: "3005"
+      DATABASE_URL: postgres://clubhub_app:dev_password@postgres:5432/clubhub_dev
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3005:3005"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3005/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  audit-service:
+    build:
+      context: .
+      dockerfile: services/audit-service/Dockerfile
+    environment:
+      PORT: "3006"
+      DATABASE_URL: postgres://clubhub_app:dev_password@postgres:5432/clubhub_dev
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3006:3006"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3006/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    environment:
+      PORT: "3100"
+      NODE_ENV: development
+      CMS_API_URL: http://cms-api:3001
+      REPLAY_SERVICE_URL: http://replay-service:3003
+      ENTROPY_SERVICE_URL: http://entropy-service:3004
+    depends_on:
+      cms-api:
+        condition: service_healthy
+      replay-service:
+        condition: service_healthy
+      entropy-service:
+        condition: service_healthy
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  postgres-data:

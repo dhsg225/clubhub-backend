@@ -1,0 +1,80 @@
+{
+  "run_id": "2026-05-22T23-48-14-172Z",
+  "timestamp": "2026-05-22T23:48:14.173Z",
+  "certification_level": "PRODUCTION",
+  "summary": {
+    "total": 10,
+    "passed": 8,
+    "conditional": 2,
+    "failed": 0
+  },
+  "scenarios": [
+    {
+      "name": "db_outage_during_freeze",
+      "status": "PASS",
+      "detail": "DB outage during freeze: FAIL_CLOSED policy defined; freezeStrong() present; memory fallback documented",
+      "caveats": []
+    },
+    {
+      "name": "concurrent_promotion_safety",
+      "status": "PASS",
+      "detail": "Concurrent promotions: DB freeze read authoritative; advisory lock in ledger",
+      "caveats": []
+    },
+    {
+      "name": "operator_token_replay_protection",
+      "status": "PASS",
+      "detail": "Token replay: JTI present; revocation wired; timingSafeEqual used",
+      "caveats": []
+    },
+    {
+      "name": "stale_authority_epoch_detection",
+      "status": "CONDITIONAL",
+      "detail": "Authority epoch: async DB increment present; in-memory cache may lag on DB failure",
+      "caveats": [
+        "Screen freeze epoch reporting not implemented — stale screen detection is one-sided"
+      ]
+    },
+    {
+      "name": "manifest_generation_race",
+      "status": "PASS",
+      "detail": "Manifest generation: async DB-authoritative; manifestEngine.js awaits",
+      "caveats": []
+    },
+    {
+      "name": "lineage_orphan_handling",
+      "status": "PASS",
+      "detail": "Lineage orphan: ORPHANED_EVENT detected; STRICT mode throws; REPLAY mode filters orphans",
+      "caveats": []
+    },
+    {
+      "name": "replay_determinism",
+      "status": "CONDITIONAL",
+      "detail": "Replay determinism: incident IDs deterministic; governed clock present; lineage timestamps remain wall-clock",
+      "caveats": [
+        "lineage_ts in withLineage() still uses wall-clock (intentional: audit timestamp)",
+        "Ledger action IDs are sequential (deterministic from DB seq, not content-addressed)"
+      ]
+    },
+    {
+      "name": "split_brain_freeze_propagation",
+      "status": "PASS",
+      "detail": "Split-brain freeze: SPLIT_BRAIN detection triggers _setFreeze; freeze_epoch tracked; getFreezeStateStrong available",
+      "caveats": []
+    },
+    {
+      "name": "clock_skew_simulation",
+      "status": "PASS",
+      "detail": "Clock skew simulation: setOffset() present; setFixed() for deterministic replay; freeze/unfreeze for replay mode",
+      "caveats": [
+        "Clock skew simulation only affects governance modules that import governed-clock — screen clocks simulated separately"
+      ]
+    },
+    {
+      "name": "recovery_governor_escalation",
+      "status": "PASS",
+      "detail": "Recovery governor: all 7 categories verified; escalation path present",
+      "caveats": []
+    }
+  ]
+}

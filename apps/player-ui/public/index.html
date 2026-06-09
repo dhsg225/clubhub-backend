@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClubHub TV Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; color: #fff; overflow: hidden; width: 100vw; height: 100vh; }
+    #content-container { width: 100%; height: 100%; }
+    #emergency-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: #7f0000;
+      flex-direction: column; align-items: center; justify-content: center;
+      font-family: sans-serif;
+    }
+    #emergency-overlay.active { display: flex; }
+    #emergency-title { font-size: 3rem; font-weight: bold; color: #fff; margin-bottom: 1rem; }
+    #emergency-message { font-size: 1.5rem; color: #fca5a5; max-width: 80%; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="content-container"></div>
+  <div id="emergency-overlay">
+    <div id="emergency-title">EMERGENCY</div>
+    <div id="emergency-message">Please follow venue staff instructions</div>
+  </div>
+  <script type="module" src="/dist/index.js"></script>
+</body>
+</html>

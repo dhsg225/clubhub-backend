@@ -1,0 +1,263 @@
+{
+  "run_id": "9b54959c-e7d5-463d-844c-142eb0f2e639",
+  "timestamp": "2026-06-08T07:10:08.946Z",
+  "type": "runner-validation",
+  "summary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 1
+  },
+  "verdict": "UNRELIABLE",
+  "_note": "1 detection mechanism(s) failed to observe expected conditions. Runner may misreport.",
+  "scenarios": [
+    {
+      "id": "VT-01",
+      "description": "Baseline failure detection",
+      "result": "MISMATCH",
+      "expected": {
+        "cms_reachable": false,
+        "baseline_passed": false,
+        "final": "RED"
+      },
+      "actual": {
+        "cms_reachable": true,
+        "baseline_passed": true,
+        "final": "GREEN"
+      },
+      "evidence": [
+        "INJECTED: cms-api stopped",
+        "GET /health/live → reachable=true status=200 body=\"[object Object]\"",
+        "/shared/screen_id = \"948d1371-c96e-4b8b-9593-f1bc774afb13\"",
+        "RESTORED: cms-api healthy"
+      ],
+      "json_excerpt": {
+        "baseline": {
+          "passed": true,
+          "evidence": [
+            "INJECTED: cms-api stopped",
+            "GET /health/live → reachable=true status=200 body=\"[object Object]\"",
+            "/shared/screen_id = \"948d1371-c96e-4b8b-9593-f1bc774afb13\"",
+            "RESTORED: cms-api healthy"
+          ]
+        },
+        "summary": {
+          "total_fm": 6,
+          "passed": 0,
+          "failed": 0,
+          "skipped": 6
+        },
+        "failures": [
+          {
+            "fm": "FM-01",
+            "status": "SKIP",
+            "skip_reason": "Runner stopped: Baseline failed — cannot run failure modes against a broken system"
+          }
+        ],
+        "final": "GREEN"
+      }
+    },
+    {
+      "id": "VT-02",
+      "description": "Missing screen_id detection (FM-03 mechanism)",
+      "result": "MATCH",
+      "expected": {
+        "stopped": true,
+        "exitCode": 1,
+        "wsRefused": true,
+        "logHasError": true
+      },
+      "actual": {
+        "stopped": true,
+        "exitCode": 1,
+        "wsRefused": true,
+        "logHasError": true
+      },
+      "evidence": [
+        "INJECTED: /shared/screen_id overwritten with empty string",
+        "Container stopped within 15s: true",
+        "Container exit code: 1",
+        "WebSocket connection refused: true",
+        "Logs contain SCREEN_ID error: true",
+        "player-runtime logs (tail): player-runtime-1  |     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24) | player-runtime-1  |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) | player-runtime-1  |  | player-runtime-1  | Node.js v20.20.2",
+        "RESTORED: /shared/screen_id = 948d1371-c96e-4b8b-9593-f1bc774afb13"
+      ],
+      "json_excerpt": {
+        "fm": "FM-03",
+        "status": "PASS",
+        "assertions": [
+          {
+            "id": "FM03-A",
+            "status": "PASS",
+            "evidence": [
+              "container exits within 15s: expected=true actual=true"
+            ]
+          },
+          {
+            "id": "FM03-B",
+            "status": "PASS",
+            "evidence": [
+              "exit code = 1: expected=1 actual=1"
+            ]
+          },
+          {
+            "id": "FM03-C",
+            "status": "PASS",
+            "evidence": [
+              "WebSocket refuses conn: expected=true actual=true"
+            ]
+          },
+          {
+            "id": "FM03-D",
+            "status": "PASS",
+            "evidence": [
+              "logs contain SCREEN_ID err: expected=true actual=true"
+            ]
+          }
+        ],
+        "evidence": [
+          "INJECTED: /shared/screen_id overwritten with empty string",
+          "Container stopped within 15s: true",
+          "Container exit code: 1",
+          "WebSocket connection refused: true",
+          "Logs contain SCREEN_ID error: true",
+          "player-runtime logs (tail): player-runtime-1  |     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24) | player-runtime-1  |     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) | player-runtime-1  |  | player-runtime-1  | Node.js v20.20.2",
+          "RESTORED: /shared/screen_id = 948d1371-c96e-4b8b-9593-f1bc774afb13"
+        ]
+      }
+    },
+    {
+      "id": "VT-03",
+      "description": "Fake/unregistered screen_id detection (FM-04 mechanism)",
+      "result": "MATCH",
+      "expected": {
+        "alive": true,
+        "identityError": true,
+        "cacheUpdateOk": true,
+        "resolveEmpty": true
+      },
+      "actual": {
+        "alive": true,
+        "identityError": true,
+        "cacheUpdateOk": true,
+        "resolveEmpty": true
+      },
+      "evidence": [
+        "INJECTED: /shared/screen_id = \"ffffffff-ffff-ffff-ffff-ffffffffffff\" (not enrolled in CMS)",
+        "Container alive after 5s: true",
+        "player-runtime logs identity/connectivity: true",
+        "player-runtime logs (tail): player-runtime-1  | [playlist-poller] Poll failed: HTTP 404 | player-runtime-1  | [orchestrator] Using cached playlist (offline fallback) checksum=7223ea71 eligible=0/2 | player-runtime-1  | [orchestrator] Corpus poll failed: 404 failures=3 backoff=22s | player-runtime-1  | [playlist-poller] Poll failed: HTTP 404 | player-runtime-1  | [orchestrator] Using cached playlist (offline fallback) checksum=7223ea71 eligible=0/2",
+        "PLAYLIST_UPDATE from cache (expected — 72h autonomy): {\"type\":\"PLAYLIST_UPDATE\",\"checksum\":\"7223ea71\",\"items\":[]}",
+        "GET /resolve/ffffffff-ffff-ffff-ffff-ffffffffffff → HTTP 404 empty=true",
+        "Resolve body: {\"error\":\"Screen not found\",\"screen_id\":\"ffffffff-ffff-ffff-ffff-ffffffffffff\",\"correlation_id\":\"878e2e6c-19f9-411a-983b-7a0d26f2796c\"}",
+        "RESTORED: /shared/screen_id = 948d1371-c96e-4b8b-9593-f1bc774afb13"
+      ],
+      "json_excerpt": {
+        "fm": "FM-04",
+        "status": "PASS",
+        "assertions": [
+          {
+            "id": "FM04-A",
+            "status": "PASS",
+            "evidence": [
+              "player-runtime stays alive: expected=true actual=true"
+            ]
+          },
+          {
+            "id": "FM04-B",
+            "status": "PASS",
+            "evidence": [
+              "logs show identity/connectivity issue: expected=true actual=true"
+            ]
+          },
+          {
+            "id": "FM04-C",
+            "status": "PASS",
+            "evidence": [
+              "cache-served PLAYLIST_UPDATE (OK): expected=true actual=true"
+            ]
+          },
+          {
+            "id": "FM04-D",
+            "status": "PASS",
+            "evidence": [
+              "/resolve returns 404 or empty: expected=true actual=true"
+            ]
+          }
+        ],
+        "evidence": [
+          "INJECTED: /shared/screen_id = \"ffffffff-ffff-ffff-ffff-ffffffffffff\" (not enrolled in CMS)",
+          "Container alive after 5s: true",
+          "player-runtime logs identity/connectivity: true",
+          "player-runtime logs (tail): player-runtime-1  | [playlist-poller] Poll failed: HTTP 404 | player-runtime-1  | [orchestrator] Using cached playlist (offline fallback) checksum=7223ea71 eligible=0/2 | player-runtime-1  | [orchestrator] Corpus poll failed: 404 failures=3 backoff=22s | player-runtime-1  | [playlist-poller] Poll failed: HTTP 404 | player-runtime-1  | [orchestrator] Using cached playlist (offline fallback) checksum=7223ea71 eligible=0/2",
+          "PLAYLIST_UPDATE from cache (expected — 72h autonomy): {\"type\":\"PLAYLIST_UPDATE\",\"checksum\":\"7223ea71\",\"items\":[]}",
+          "GET /resolve/ffffffff-ffff-ffff-ffff-ffffffffffff → HTTP 404 empty=true",
+          "Resolve body: {\"error\":\"Screen not found\",\"screen_id\":\"ffffffff-ffff-ffff-ffff-ffffffffffff\",\"correlation_id\":\"878e2e6c-19f9-411a-983b-7a0d26f2796c\"}",
+          "RESTORED: /shared/screen_id = 948d1371-c96e-4b8b-9593-f1bc774afb13"
+        ]
+      }
+    },
+    {
+      "id": "VT-04",
+      "description": "WebSocket outage detection (player-runtime stopped)",
+      "result": "MATCH",
+      "expected": {
+        "wsRefused": true,
+        "noUpdate": true,
+        "remainsClosed": true
+      },
+      "actual": {
+        "wsRefused": true,
+        "noUpdate": true,
+        "remainsClosed": true
+      },
+      "evidence": [
+        "INJECTED: player-runtime stopped, port 7777 closed",
+        "WebSocket connection refused: true",
+        "No PLAYLIST_UPDATE after 11001ms (timeout fired correctly)",
+        "WS still refused after observation window: true",
+        "RESTORED: player-runtime started",
+        "PLAYLIST_UPDATE received after restore (system healthy)"
+      ],
+      "json_excerpt": {
+        "_note": "WebSocket outage affects FM-01 (FM01-B cache update), FM-02 (FM02-B post-restart), FM-06 (FM06-B post-reconnect)",
+        "affected_fms": [
+          "FM-01",
+          "FM-02",
+          "FM-06"
+        ],
+        "detection_result": "FAIL correctly reported",
+        "assertions": [
+          {
+            "id": "WS-OUTAGE-A",
+            "status": "PASS",
+            "evidence": [
+              "WS refuses connection: expected=true actual=true"
+            ]
+          },
+          {
+            "id": "WS-OUTAGE-B",
+            "status": "PASS",
+            "evidence": [
+              "no PLAYLIST_UPDATE (timeout fires): expected=false actual=false"
+            ]
+          },
+          {
+            "id": "WS-OUTAGE-C",
+            "status": "PASS",
+            "evidence": [
+              "WS remains closed (no ghost server): expected=true actual=true"
+            ]
+          }
+        ],
+        "evidence": [
+          "INJECTED: player-runtime stopped, port 7777 closed",
+          "WebSocket connection refused: true",
+          "No PLAYLIST_UPDATE after 11001ms (timeout fired correctly)",
+          "WS still refused after observation window: true",
+          "RESTORED: player-runtime started",
+          "PLAYLIST_UPDATE received after restore (system healthy)"
+        ]
+      }
+    }
+  ]
+}

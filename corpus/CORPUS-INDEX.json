@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": 1748476800000,
+  "total_packets": 10,
+  "active_packets": 9,
+  "archived_packets": 1,
+  "packets": [
+    {
+      "packet_id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "file_path": "golden/GOLD-001.json",
+      "corpus_class": "golden",
+      "status": "active",
+      "description": "GOLD-001: Single-screen structural resolution. One active campaign schedule, no overrides, no emergency, no sponsorships. PRE resolves at LEVEL_3 (Campaign Layer). America/Chicago timezone. First delivery — no prior delivery log.",
+      "captured_at": 1748044800000,
+      "packet_hash": "9e6c9dd26d17e88e821667cd2bfb30b41d21bc047dc62bea893b496df3c10ac4"
+    },
+    {
+      "packet_id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "file_path": "golden/GOLD-002.json",
+      "corpus_class": "golden",
+      "status": "active",
+      "description": "GOLD-002: Area inheritance. Screen in area with no screen-specific or tv_group-specific schedule. Area-level schedule (specificity=3) is active. PRE resolves at LEVEL_3.",
+      "captured_at": 1748044800000,
+      "packet_hash": "efb0bf3db42b034c6632bf1d4f0e564878204f5f3a4683250cdf506e82bff4e4"
+    },
+    {
+      "packet_id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "file_path": "golden/GOLD-003.json",
+      "corpus_class": "golden",
+      "status": "active",
+      "description": "GOLD-003: Active emergency overrides all other content. LEVEL_0 resolution. Emergency content is sol",
+      "captured_at": 1748044800000,
+      "packet_hash": "dc5c61d6cea4d289e862d73acfb891169b243389ea329dd7fefaa8e43edf4e8e"
+    },
+    {
+      "packet_id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "file_path": "golden/GOLD-004.json",
+      "corpus_class": "golden",
+      "status": "active",
+      "description": "GOLD-004: Operational override (is_operational=true) takes precedence over campaign schedule. LEVEL_",
+      "captured_at": 1748044800000,
+      "packet_hash": "80b16fb335764f44e5dc576955486e71a167c7ab700e496a09b2f588fddf4d7c"
+    },
+    {
+      "packet_id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "file_path": "golden/GOLD-005.json",
+      "corpus_class": "golden",
+      "status": "active",
+      "description": "GOLD-005: All resolution levels skip. PRE falls to LEVEL_5 system fallback. Output contains system:f",
+      "captured_at": 1748044800000,
+      "packet_hash": "0cb623ef4e7d4fb10945713bac937e7f9b16833894ab253d40eb7b16f0eb1d4c"
+    },
+    {
+      "packet_id": "a1b2c3d4-e001-4000-8000-000000000101",
+      "file_path": "edge_cases/EDGE-001.json",
+      "corpus_class": "edge_case",
+      "status": "retired",
+      "description": "EDGE-001 (RETIRED): Timestamp 1748203200000 resolved to Sunday 2025-05-25, not Monday 2026-05-25 as described. Superseded by EDGE-001v2 (a1b2c3d4-e001-4000-8000-000000000111). Retirement record: ret-edge001-20260523.",
+      "captured_at": 1748044800000,
+      "packet_hash": "6a5b624de589d18a18bb2b94b41cc0b1c9c914347712f10ffe32eea8bf1da023"
+    },
+    {
+      "packet_id": "a1b2c3d4-e001-4000-8000-000000000111",
+      "file_path": "edge_cases/EDGE-001-v2.json",
+      "corpus_class": "edge_case",
+      "status": "active",
+      "description": "EDGE-001v2: Schedule with days_of_week=[1] (Monday-only). Evaluation time is Monday 2026-05-25T14:00:00 CDT (at=1779735600000). Schedule is active. Tests day-of-week constraint with IANA timezone. Replaces defective EDGE-001.",
+      "captured_at": 1748476800000,
+      "packet_hash": "028e0b2d7b5890f07a29686fb9f08028dd65fe970e704079db0c3af26fb0350c"
+    },
+    {
+      "packet_id": "a1b2c3d4-e002-4000-8000-000000000102",
+      "file_path": "edge_cases/EDGE-002.json",
+      "corpus_class": "edge_case",
+      "status": "active",
+      "description": "EDGE-002: Schedule with days_of_week=[1] (Monday-only). Evaluation time is Wednesday 2026-05-27T14:0",
+      "captured_at": 1748044800000,
+      "packet_hash": "99397bf6b8d3924d09ef277d9cb1f00b352b7277d2bd1261f05e8453ed9bd6a3"
+    },
+    {
+      "packet_id": "a1b2c3d4-e003-4000-8000-000000000103",
+      "file_path": "edge_cases/EDGE-003.json",
+      "corpus_class": "edge_case",
+      "status": "active",
+      "description": "EDGE-003: Override with expires_at in the past is treated as inactive. PRE skips LEVEL_1 and resolve",
+      "captured_at": 1748044800000,
+      "packet_hash": "d4b6384c771144eeca69dc4a83c2e6f878aafa73341085f2ebed98094728f3e8"
+    },
+    {
+      "packet_id": "a1b2c3d4-c001-4000-8000-000000000201",
+      "file_path": "chaos/CHAOS-001.json",
+      "corpus_class": "chaos",
+      "status": "active",
+      "description": "CHAOS-001: DB unavailable — minimal system state (no schedules, overrides, content). PRE must return",
+      "captured_at": 1748044800000,
+      "packet_hash": "abb2fa52a813af4e328dc577ae89e9a57bc9442a6c0dcbd0b7600612a07e71f4"
+    }
+  ]
+}

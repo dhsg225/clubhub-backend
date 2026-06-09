@@ -1,0 +1,22 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: clubhub-postgres-dev
+    environment:
+      POSTGRES_DB: clubhub
+      POSTGRES_USER: clubhub_app
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5433:5432"
+    volumes:
+      - clubhub-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clubhub_app -d clubhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  clubhub-postgres-data:

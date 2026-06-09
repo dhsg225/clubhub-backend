@@ -1,0 +1,6 @@
+# Production — NEVER commit actual values
+# Set via secrets manager or TF_VAR_ environment variables
+region             = "us-east-1"
+subnet_ids         = ["subnet-prod-1", "subnet-prod-2", "subnet-prod-3"]
+security_group_ids = ["sg-prod-postgresql"]
+monitoring_role_arn = "arn:aws:iam::ACCOUNT:role/prod-clubhub-monitoring"

@@ -1,0 +1,23 @@
+{
+  "retirement_id": "ret-edge001-20260523",
+  "retired_at": 1748476800000,
+  "retired_by": "platform-team",
+  "packet_id": "a1b2c3d4-e001-4000-8000-000000000101",
+  "defect_class": "CORPUS_AUTHORING_ERROR",
+  "root_cause": "Timestamp 1748203200000 resolves to 2025-05-25T15:00:00 CDT (Sunday), not 2026-05-25T14:00:00 CDT (Monday) as described. days_of_week=[1] (Monday) was not satisfied, causing LEVEL_3 schedule to be inactive and implementation to produce system fallback rather than campaign content.",
+  "discovery_method": "STEP_4_REPLAY_EXECUTION",
+  "replay_evidence": {
+    "actual_output_hash": "488f17cc",
+    "expected_output_hash": "6bfddd28",
+    "divergence_class": 4,
+    "divergence_label": "CATASTROPHIC",
+    "primary_field": "is_fallback",
+    "field_diffs": 10
+  },
+  "correct_timestamp": 1779735600000,
+  "correct_date": "2026-05-25T19:00:00Z",
+  "correct_date_local": "2026-05-25T14:00:00 CDT",
+  "replacement_packet_id": "a1b2c3d4-e001-4000-8000-000000000111",
+  "replacement_file": "corpus/edge_cases/EDGE-001-v2.json",
+  "defective_archive": "corpus/archived/edge_cases/EDGE-001-DEFECTIVE-20260523.json"
+}

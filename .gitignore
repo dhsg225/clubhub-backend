@@ -1,0 +1,13 @@
+soak-reports/
+backups/
+.env
+.env.production
+
+# Monorepo build outputs
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+.env.local
+.env.*.local
+coverage/

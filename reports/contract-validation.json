@@ -1,0 +1,577 @@
+{
+  "run_id": "2026-06-09T09-25-39-456Z",
+  "timestamp": "2026-06-09T09:25:39.457Z",
+  "contract_path": "CLUBHUB_SYSTEM_CONTRACTS.md",
+  "thresholds_path": "test-config/thresholds.json",
+  "summary": {
+    "total_checks": 79,
+    "passed": 79,
+    "failed": 0,
+    "warned": 0,
+    "status": "PASS"
+  },
+  "checks": [
+    {
+      "name": "contract_file_present",
+      "status": "PASS",
+      "detail": "/Users/admin/Dropbox/Development/clubhub_player/CLUBHUB_SYSTEM_CONTRACTS.md",
+      "blocker": null
+    },
+    {
+      "name": "contract_version_and_status",
+      "status": "PASS",
+      "detail": "Version 1.0.0, Status: ENFORCED",
+      "blocker": null
+    },
+    {
+      "name": "required_sections_present",
+      "status": "PASS",
+      "detail": "All 10 required sections present",
+      "missing": [],
+      "blocker": null
+    },
+    {
+      "name": "thresholds_json_loadable",
+      "status": "PASS",
+      "detail": "/Users/admin/Dropbox/Development/clubhub_player/test-config/thresholds.json",
+      "blocker": null
+    },
+    {
+      "name": "threshold_drift",
+      "status": "PASS",
+      "detail": "All 17 contract thresholds match thresholds.json",
+      "violations": [],
+      "warnings": [],
+      "blocker": null
+    },
+    {
+      "name": "runner_threshold_coverage",
+      "status": "PASS",
+      "detail": "All 8 threshold key(s) enforced in runner.js",
+      "unchecked": [],
+      "blocker": null
+    },
+    {
+      "name": "hidden_thresholds",
+      "status": "PASS",
+      "detail": "No hardcoded contract threshold values found in 5 scanned file(s)",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "gap_registry_valid",
+      "status": "PASS",
+      "detail": "Gap registry valid: 0 observations, 0 SEVERE drift entries",
+      "blocker": null
+    },
+    {
+      "name": "metric_evidence_paths",
+      "status": "PASS",
+      "detail": "All 8 governed metrics have verified producer and runner gate paths",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "suite_coverage",
+      "status": "PASS",
+      "detail": "All 8 governed metrics covered by 3 suite(s)",
+      "violations": [],
+      "warnings": [],
+      "blocker": null
+    },
+    {
+      "name": "nondeterminism_patterns",
+      "status": "PASS",
+      "detail": "No nondeterministic patterns found in 6 scanned file(s)",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "state_domain_coverage",
+      "status": "PASS",
+      "detail": "All 8 governed domains (incl. recovery) declared with transitions and legal exports verified",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "mutation_envelope_usage",
+      "status": "PASS",
+      "detail": "applyMutation verified in runner.js and chaos.js; saveMutationLog/saveStateHashTrace/getMutationLog exported",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "direct_mutation_patterns",
+      "status": "PASS",
+      "detail": "No direct mutation patterns found in 7 scanned file(s)",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "state_hash_chain",
+      "status": "PASS",
+      "detail": "Mutation hash chain verified: state-hash.js wired into mutations.js and replay.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "recovery_governance",
+      "status": "PASS",
+      "detail": "All 7 recovery categories governed; retryable thresholds present",
+      "violations": [],
+      "warnings": [
+        {
+          "file": "test-runner/lib/chaos.js",
+          "line": 138,
+          "issue": "Possible ungovernored retry loop with setTimeout in chaos.js — consider using RecoveryGovernor",
+          "action": "Replace ad-hoc retry loops with RecoveryGovernor.startRecovery() / failRecovery()"
+        }
+      ],
+      "blocker": null
+    },
+    {
+      "name": "fleet_consensus",
+      "status": "PASS",
+      "detail": "Fleet consensus verified: split-brain detection, rollout freeze, and manifest lineage present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_bundle",
+      "status": "PASS",
+      "detail": "Incident bundle verified: createIncidentBundle exported, mutation log and threshold snapshot included, replay command present, wired in runner.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "policy_engine",
+      "status": "PASS",
+      "detail": "policy-engine.js verified: all 6 named policies present, evaluatePolicy and saveDecisions exported",
+      "violations": [],
+      "warnings": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_ledger",
+      "status": "PASS",
+      "detail": "operator-ledger.js verified: appendEntry, verifyIntegrity, LEDGER_GENESIS, waiver_created present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "autonomous_rollout",
+      "status": "PASS",
+      "detail": "autonomous-rollout.js verified: evaluatePromotion uses policy engine, evidence_snapshot preserved",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "distributed_authority",
+      "status": "PASS",
+      "detail": "distributed-authority.js verified: DB-backed, acquireLease, epoch, freeze_propagated event present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "governed_config",
+      "status": "PASS",
+      "detail": "governed-config.js verified: config_hash, config_version, justification, rollbackTo present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_orchestration",
+      "status": "PASS",
+      "detail": "incident-orchestrator.js verified: all 7 incident states, createIncident, policyEngine present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "recovery_governor_wired",
+      "status": "PASS",
+      "detail": "RecoveryGovernor verified: chaos.js routes waitForHealth() through governor; runner.js injects governor",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "fleet_consensus_wired",
+      "status": "PASS",
+      "detail": "Fleet consensus wiring verified: incrementEpoch on startup, incrementManifestGeneration on content change, lineage rejection classification present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "freeze_enforcement",
+      "status": "PASS",
+      "detail": "Freeze enforcement verified: isRolloutFrozen() consulted in promoteRing(), all 4 freeze classifications present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "event_causality",
+      "status": "PASS",
+      "detail": "Event causality verified: withLineage, verifyLineage, exportLineage, ORPHANED_EVENT detection all present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_overrides",
+      "status": "PASS",
+      "detail": "Operator overrides verified: expiry enforced, SECURITY.override_used emitted, ledger-appended, incident-linked",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "governance_db",
+      "status": "PASS",
+      "detail": "governance-db.js verified: initSchema, incrementInt, getIntValue, setIntValue present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "cluster_consensus_persistent",
+      "status": "PASS",
+      "detail": "Fleet consensus persistence verified: setPool, initFromDb, governance-db wired",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "ledger_db_persistent",
+      "status": "PASS",
+      "detail": "Operator ledger DB persistence verified: setPool, initFromDb, sequential IDs",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_durable",
+      "status": "PASS",
+      "detail": "Incident durability verified: initFromDb, persistIncident present, deterministic IDs",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "config_db_persistent",
+      "status": "PASS",
+      "detail": "Governed config DB persistence verified: initFromDb and DB persistence present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "no_direct_threshold_reads",
+      "status": "PASS",
+      "detail": "No direct thresholds.json reads in backend/src (governed-config.js and index.js bootstrap are exempt)",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "deterministic_ids",
+      "status": "PASS",
+      "detail": "Deterministic ID generation verified: no randomBytes in governed entity ID paths",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "freeze_ledger_linked",
+      "status": "PASS",
+      "detail": "Freeze/unfreeze ledger linkage verified: rollout_freeze and rollout_unfreeze appended to operator ledger",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "strong_freeze_read",
+      "status": "PASS",
+      "detail": "Strong freeze read verified: rollout-store.js uses DB-authoritative isRolloutFrozenFromDb before promoting",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "async_epoch_increment",
+      "status": "PASS",
+      "detail": "Async epoch increment verified: incrementEpoch is async+DB-authoritative; index.js awaits it",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "async_manifest_generation",
+      "status": "PASS",
+      "detail": "Async manifest generation verified: incrementManifestGeneration is async+DB-authoritative; manifestEngine.js awaits it",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "linearized_ledger_append",
+      "status": "PASS",
+      "detail": "Linearized ledger append verified: appendEntryLinearized with advisory lock present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_version_lock",
+      "status": "PASS",
+      "detail": "Incident version lock verified: transitionStrong with advisory lock and optimistic locking present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "db_failure_governance",
+      "status": "PASS",
+      "detail": "DB failure governance verified: DB_FAILURE_MODE and HA_SAFETY_MODEL defined in distributed-authority.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "governance_transaction_boundaries",
+      "status": "PASS",
+      "detail": "Governance transaction boundaries verified: strong freeze read and withAdvisoryLock primitive present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "ha_deployment_ceiling",
+      "status": "PASS",
+      "detail": "HA deployment ceiling verified: active/active topology safety ratings and advisory-only paths documented",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "governed_threshold_accessor",
+      "status": "PASS",
+      "detail": "Governed threshold accessors verified: getThreshold, requireThreshold, getThresholdSnapshot, getThresholdVersion all present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "governed_config_singleton",
+      "status": "PASS",
+      "detail": "Governed-config singleton API verified: setInstance and getInstance exported",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "no_runtime_threshold_reads",
+      "status": "PASS",
+      "detail": "No runtime thresholds.json reads in ota.js or screenAuth.js — both route through governed-config",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "threshold_snapshot_hashing",
+      "status": "PASS",
+      "detail": "Threshold snapshot hashing verified: configHash, getThresholdSnapshot, and config_hash field all present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "lineage_mode_support",
+      "status": "PASS",
+      "detail": "verifyLineage STRICT/REPORT/REPLAY modes present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "rollout_lineage_wired",
+      "status": "PASS",
+      "detail": "rollout-store.js uses withLineage on RING events",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_lineage_wired",
+      "status": "PASS",
+      "detail": "incident-orchestrator.js uses withLineage in createIncident",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "lineage_modes_exported",
+      "status": "PASS",
+      "detail": "LINEAGE_MODES exported from event-lineage.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "lineage_strict_throws",
+      "status": "PASS",
+      "detail": "verifyLineage STRICT mode throws on anomalies as required",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "deterministic_id_module",
+      "status": "PASS",
+      "detail": "deterministic-id.js verified: deriveDeterministicId with content-addressing present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_id_deterministic",
+      "status": "PASS",
+      "detail": "Incident ID hash does not include Date.now() — deterministic across nodes",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_id_uses_module",
+      "status": "PASS",
+      "detail": "incident-orchestrator.js uses deterministic-id module for ID derivation",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "deterministic_id_stable_stringify",
+      "status": "PASS",
+      "detail": "deterministic-id.js uses stable serialisation for canonical form",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "freeze_epoch_counter",
+      "status": "PASS",
+      "detail": "freeze_epoch counter present and increments on every freeze event",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "get_freeze_state_strong",
+      "status": "PASS",
+      "detail": "getFreezeStateStrong exported from fleet-consensus.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "freeze_epoch_db_persisted",
+      "status": "PASS",
+      "detail": "freeze_epoch persisted to DB and read back in getFreezeStateStrong",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "freeze_epoch_increments",
+      "status": "PASS",
+      "detail": "freeze_epoch increments on both freeze and unfreeze events",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_auth_module",
+      "status": "PASS",
+      "detail": "operatorAuth.js middleware module present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_auth_hmac",
+      "status": "PASS",
+      "detail": "operatorAuth.js uses HMAC-SHA256 with constant-time comparison",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_auth_roles",
+      "status": "PASS",
+      "detail": "operatorAuth.js defines ADMIN, OPERATOR, VIEWER roles",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_auth_exports",
+      "status": "PASS",
+      "detail": "operatorAuth.js exports requireOperatorAuth, issueOperatorToken, verifyOperatorToken",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "ota_mutation_protected",
+      "status": "PASS",
+      "detail": "OTA mutation routes protected by requireOperatorAuth",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_token_expiry",
+      "status": "PASS",
+      "detail": "operatorAuth.js enforces token expiry",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "max_screens_bound",
+      "status": "PASS",
+      "detail": "MAX_SCREENS bound defined in fleet-consensus.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "screen_eviction_policy",
+      "status": "PASS",
+      "detail": "recordHeartbeat evicts stale screens when at MAX_SCREENS capacity",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "ledger_max_size",
+      "status": "PASS",
+      "detail": "MAX_LEDGER_ENTRIES defined in operator-ledger.js",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "ledger_compaction",
+      "status": "PASS",
+      "detail": "operator-ledger.js compacts in-memory store when exceeding MAX_LEDGER_ENTRIES",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "governed_clock",
+      "status": "PASS",
+      "detail": "governed-clock.js verified: now/nowIso/monotonic/freeze/unfreeze/setOffset all present; event-lineage uses governed clock",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "full_lineage_enforcement",
+      "status": "PASS",
+      "detail": "Core governed emitters (rollout-store, rollout-state, incident-orchestrator) all use withLineage()",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "operator_revocation",
+      "status": "PASS",
+      "detail": "operator-sessions.js verified: revocation, operator-level revoke, and key rotation all present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "jti_replay_protection",
+      "status": "PASS",
+      "detail": "JTI present in tokens; revocation check wired in verifyOperatorToken",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "strong_freeze_consistency",
+      "status": "PASS",
+      "detail": "Strong freeze consistency verified: freezeStrong() exists; DB failure policy configured",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "incident_lifecycle_governance",
+      "status": "PASS",
+      "detail": "Incident lifecycle governance verified: MAX_ACTIVE_INCIDENTS bounded; archiveResolvedIncidents present",
+      "violations": [],
+      "blocker": null
+    },
+    {
+      "name": "certification_harness",
+      "status": "PASS",
+      "detail": "Certification harness verified: all 10 governance failure scenarios present",
+      "violations": [],
+      "blocker": null
+    }
+  ],
+  "deploy_blockers": [],
+  "exit_code": 0
+}

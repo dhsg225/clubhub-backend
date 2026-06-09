@@ -1,0 +1,93 @@
+name: CI Stage 15 — Venue Preflight Gate
+
+# Blocks any deployment to a real venue unless all 10 operational conditions
+# are satisfied. Must be run manually before first-venue go-live.
+#
+# This workflow is merge-blocking when run as a required status check.
+# It is also invocable manually (workflow_dispatch) before any venue deployment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cms_api_url:
+        description: 'CMS API URL to validate against'
+        required: true
+        type: string
+        default: 'https://api.clubhub.tv'
+      deployment_group_id:
+        description: 'Deployment group ID to validate'
+        required: false
+        type: string
+      test_screen_id:
+        description: 'Screen ID for determinism + audit checks'
+        required: false
+        type: string
+
+  pull_request:
+    paths:
+      - 'services/cms-api/src/**'
+      - 'services/cms-api/migrations/**'
+      - 'player-runtime/src/**'
+      - 'ci/scripts/venue-preflight.ts'
+
+jobs:
+  venue-preflight:
+    name: Venue Preflight Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # On PRs: run against a local test stack
+      - name: Start local test stack (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker compose -f docker-compose.dev.yml up -d
+          sleep 5
+          JWT_VERIFY=false pnpm --filter cms-api db:migrate
+          JWT_VERIFY=false pnpm --filter cms-api seed 2>/dev/null || true
+
+      - name: Run venue preflight gate
+        env:
+          CMS_API_URL: ${{ github.event_name == 'pull_request' && 'http://localhost:3000' || inputs.cms_api_url }}
+          DEPLOYMENT_GROUP_ID: ${{ inputs.deployment_group_id || '' }}
+          TEST_SCREEN_ID: ${{ inputs.test_screen_id || '60000000-0000-0000-0000-000000000001' }}
+          DETERMINISM_RUNS: '5'
+          PREFLIGHT_OUTPUT_FILE: 'venue-preflight-result.json'
+        run: npx tsx ci/scripts/venue-preflight.ts
+
+      - name: Upload preflight report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: venue-preflight-report
+          path: venue-preflight-result.json
+          retention-days: 30
+
+      # On PR: fail the check if preflight fails (merge-blocking)
+      - name: Assert preflight passed (merge gate)
+        if: always()
+        run: |
+          VERDICT=$(jq -r '.verdict' venue-preflight-result.json 2>/dev/null || echo "FAIL")
+          if [[ "$VERDICT" != "PASS" ]]; then
+            echo "::error::Venue preflight FAILED — deployment blocked"
+            echo "::error::See venue-preflight-result.json artifact for details"
+            exit 1
+          fi
+          echo "Venue preflight PASSED — deployment permitted"
+
+      - name: Stop local test stack (PR only)
+        if: github.event_name == 'pull_request' && always()
+        run: docker compose -f docker-compose.dev.yml down -v 2>/dev/null || true

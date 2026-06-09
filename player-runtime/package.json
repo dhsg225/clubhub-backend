@@ -1,0 +1,25 @@
+{
+  "name": "@clubhub/player-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-vm-modules dist/index.js",
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clubhub/pre-types": "workspace:*",
+    "@clubhub/constitutional-types": "workspace:*",
+    "@clubhub/fnv-checksum": "workspace:*",
+    "@clubhub/telemetry-sdk": "workspace:*",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "tsx": "^4.7.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0"
+  }
+}

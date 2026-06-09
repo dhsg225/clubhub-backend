@@ -1,0 +1,12 @@
+# Compose overlay: publishes ports for host-side observation by failure-mode-runner.mjs
+# Usage: docker compose -f docker-compose.integration.yml -f docker-compose.fm-ports.yml ...
+services:
+  cms-api:
+    ports:
+      - "3001:3001"
+  player-runtime:
+    ports:
+      - "7777:7777"
+  asset-server:
+    ports:
+      - "9999:80"

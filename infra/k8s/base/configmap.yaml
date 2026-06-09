@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clubhub-config
+  namespace: clubhub
+data:
+  CORPUS_POLL_INTERVAL_MS: "60000"
+  HEARTBEAT_INTERVAL_MS: "30000"
+  ENTROPY_VENUE_SCAN_INTERVAL_MS: "3600000"   # 60 min
+  ENTROPY_FLEET_SCAN_INTERVAL_MS: "21600000"  # 6 hours
+  AUDIT_QUERYABLE_DAYS: "90"
+  AUDIT_ARCHIVAL_DAYS: "365"
+  AUTONOMOUS_WINDOW_MS: "259200000"           # 72 hours — constitutional minimum
+  CANARY_MINIMUM_SHADOW_DAYS: "10"            # minimum 10 days SHADOW_ONLY before INTERNAL_CANARY

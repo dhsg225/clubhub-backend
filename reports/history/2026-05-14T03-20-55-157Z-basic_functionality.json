@@ -1,0 +1,139 @@
+{
+  "run_id": "2026-05-14T03-20-55-157Z",
+  "suite": "Basic Functionality",
+  "timestamp": "2026-05-14T03:21:29.342Z",
+  "duration_ms": 34184,
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "status": "PASS"
+  },
+  "metrics": {
+    "total_screens": 10,
+    "poll_success_rate": 100,
+    "p95_latency_ms": 18,
+    "max_offline_streak": 0,
+    "desync_count": 0,
+    "recovery_score": 100,
+    "screens": [
+      {
+        "id": "test-screen-02",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-01",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 2
+      },
+      {
+        "id": "test-screen-03",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-04",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-05",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-06",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-07",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-08",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-09",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-10",
+        "success_count": 3,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      }
+    ]
+  },
+  "tests": [
+    {
+      "name": "health_check",
+      "status": "passed",
+      "duration_ms": 55,
+      "metrics": {}
+    },
+    {
+      "name": "cold_start",
+      "status": "passed",
+      "duration_ms": 4004,
+      "metrics": {
+        "spread": null
+      }
+    },
+    {
+      "name": "manifest_delivery",
+      "status": "passed",
+      "duration_ms": 15073,
+      "metrics": {}
+    },
+    {
+      "name": "fallback_promotion",
+      "status": "passed",
+      "duration_ms": 17,
+      "metrics": {}
+    },
+    {
+      "name": "cache_persistence",
+      "status": "passed",
+      "duration_ms": 15020,
+      "metrics": {
+        "recoveryTime": 14534
+      }
+    }
+  ]
+}

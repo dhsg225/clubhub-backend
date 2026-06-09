@@ -1,0 +1,115 @@
+{
+  "schema": "venue-preflight/v1",
+  "at_utc_ms": 1780296427634,
+  "environment": {
+    "cms_api_url": "http://localhost:3001",
+    "deployment_group_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "verdict": "PASS",
+  "blocking_failures": 0,
+  "checks": [
+    {
+      "id": "migrations",
+      "name": "All migrations applied",
+      "pass": true,
+      "blocking": true,
+      "detail": "API is HEALTHY (migration count not reported — check DB directly)",
+      "duration_ms": 33,
+      "at_utc_ms": 1780296427523
+    },
+    {
+      "id": "determinism",
+      "name": "PRE replay determinism",
+      "pass": true,
+      "blocking": true,
+      "detail": "Deterministic: 5 runs → same checksum (50d2bc6f)",
+      "duration_ms": 74,
+      "at_utc_ms": 1780296427597
+    },
+    {
+      "id": "rollback_route",
+      "name": "Rollback route reachable",
+      "pass": true,
+      "blocking": true,
+      "detail": "Rollback route reachable (404 — no deployments yet, expected pre-prod)",
+      "duration_ms": 5,
+      "at_utc_ms": 1780296427602
+    },
+    {
+      "id": "db_health",
+      "name": "PgBouncer / DB health",
+      "pass": true,
+      "blocking": true,
+      "detail": "Database connected and API healthy",
+      "duration_ms": 5,
+      "at_utc_ms": 1780296427607
+    },
+    {
+      "id": "asset_url_ttl",
+      "name": "Asset URL TTL policy valid",
+      "pass": true,
+      "blocking": true,
+      "detail": "No asset URLs in corpus — TTL check not applicable",
+      "duration_ms": 13,
+      "at_utc_ms": 1780296427620
+    },
+    {
+      "id": "partitions",
+      "name": "Audit partition maintenance",
+      "pass": true,
+      "blocking": true,
+      "detail": "Partition status reported by API — current month OK",
+      "duration_ms": 2,
+      "at_utc_ms": 1780296427622
+    },
+    {
+      "id": "audit_integrity",
+      "name": "Audit append-only invariant",
+      "pass": true,
+      "blocking": true,
+      "detail": "No audit records for this screen yet (expected pre-production)",
+      "duration_ms": 2,
+      "at_utc_ms": 1780296427624
+    },
+    {
+      "id": "watchdog",
+      "name": "Watchdog endpoints healthy",
+      "pass": true,
+      "blocking": true,
+      "detail": "All health endpoints responding (live + ready)",
+      "duration_ms": 3,
+      "at_utc_ms": 1780296427627
+    },
+    {
+      "id": "canary_clear",
+      "name": "Canary stage clear",
+      "pass": true,
+      "blocking": true,
+      "detail": "No canary deployments found — clean state",
+      "duration_ms": 3,
+      "at_utc_ms": 1780296427630
+    },
+    {
+      "id": "freeze_inactive",
+      "name": "Constitutional freeze inactive",
+      "pass": true,
+      "blocking": true,
+      "detail": "No constitutional freeze active — deployment permitted",
+      "duration_ms": 3,
+      "at_utc_ms": 1780296427633
+    },
+    {
+      "id": "tls_cert",
+      "name": "TLS certificate valid",
+      "pass": true,
+      "blocking": false,
+      "detail": "Not HTTPS — skipping TLS certificate check",
+      "duration_ms": 0,
+      "at_utc_ms": 1780296427633
+    }
+  ],
+  "human_summary": [
+    "Venue Preflight: PASS",
+    "Checks: 11/11 passed in 145ms"
+  ]
+}

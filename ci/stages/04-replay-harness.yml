@@ -1,0 +1,64 @@
+name: "Stage 04 — Replay Harness"
+
+# Constitutional authority: EXECUTABLE-CONSTITUTION-BOOTSTRAP-v1.md §11
+# Gate type: BLOCKING — failure prevents merge
+#
+# Runs the full corpus replay harness against the current PRE implementation.
+# Every active corpus packet must produce output that matches its stored
+# output_hash exactly. Hash mismatch = behavioral divergence = CI failure.
+#
+# This stage enforces:
+#   - PRE determinism: same input always produces same output_hash
+#   - No behavioral regression: existing packets must continue to pass
+#   - Invariant compliance: INV-1 through INV-10 run on every output
+#
+# Failure categories:
+#   BEHAVIORAL_DIVERGENCE  — output_hash mismatch (regression or bug)
+#   INVARIANT_VIOLATION    — invariant assertion failed on actual output
+#   INTEGRITY_FAILURE      — packet_hash, input_hash, or output_hash corrupted
+#   EXECUTION_ERROR        — PRE.resolve() threw unexpectedly
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  replay-harness:
+    name: "Corpus Replay (9/9 required)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Corpus Integrity Verification
+        run: npx ts-node scripts/verify-corpus-integrity.ts
+        # Verifies packet_hash, input_hash, and output_hash for all active packets.
+        # Fails if any packet has been tampered with or has a hash mismatch.
+        # Exit code 1 = integrity failure. Blocks downstream replay step.
+
+      - name: Run Replay Harness
+        run: npx ts-node scripts/run-replay.ts
+        # Runs PRE.resolve() on every active corpus packet and compares
+        # actual output_hash to stored output_hash.
+        # Exit code 1 = at least one packet failed. Blocks merge.
+
+      - name: Upload Replay Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-report-${{ github.run_id }}
+          path: replay-output/
+          retention-days: 30

@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "capabilities": {
+    "governance_kernel": {
+      "authority_model":    "sole_kernel",
+      "ha_ceiling":         "2-node-active-active",
+      "consistency_levels": ["MEMORY_ONLY","CACHE_COHERENT","DB_AUTHORITATIVE","LINEARIZED"],
+      "replay_modes":       ["LIVE","REPLAY","FORENSIC","SIMULATION"]
+    },
+    "trace_store": {
+      "model":          "append_only_hash_chained",
+      "storage":        "postgresql",
+      "replay_safe":    true,
+      "forensic_capable": true
+    },
+    "ai_orchestration": {
+      "model":          "policy_governed",
+      "ai_authority":   "none",
+      "kernel_authority":"sole",
+      "h_invariants":   8
+    },
+    "simulation": {
+      "deterministic":  true,
+      "scenarios":      10,
+      "h_invariants":   6
+    },
+    "control_plane": {
+      "authentication": true,
+      "rate_limiting":  true,
+      "lineage_tagging":true,
+      "bypass_prevention": true
+    }
+  },
+  "certifications": {
+    "a7": { "checks": 54, "status": "PASS" },
+    "a8": { "checks": 56, "status": "PASS" },
+    "a9": { "checks": 70, "status": "PASS" }
+  }
+}

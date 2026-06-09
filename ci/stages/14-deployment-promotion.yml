@@ -1,0 +1,15 @@
+# CI Stage 14 — Deployment Promotion Gates
+# Human approval required for production canary advancement
+name: "Stage 14: Deployment Promotion"
+description: "Canary advancement gates with human authorization"
+required: true
+blocking: true
+notes:
+  - "Advancement beyond SHADOW_ONLY requires human authorization token >= 8 chars"
+  - "Stages are sequential — cannot skip"
+  - "Minimum 10 days SHADOW_ONLY before INTERNAL_CANARY advancement"
+runs:
+  - name: canary-gate
+    command: npx tsx ci/scripts/canary-gate.ts
+  - name: deployment-verify
+    command: npx tsx ci/scripts/deployment-verify.ts

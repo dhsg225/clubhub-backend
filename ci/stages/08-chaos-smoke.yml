@@ -1,0 +1,80 @@
+name: "Stage 08 — Chaos Smoke"
+
+# Constitutional authority: VERIFICATION-AND-SAFETY-SYSTEMS-v1.md §8
+# Gate type: BLOCKING — failure prevents merge
+#
+# Executes all 7 chaos scenarios against PRE.resolve() and verifies:
+#   - PRE never throws under degraded conditions (all scenarios complete)
+#   - All 10 constitutional invariants pass under each scenario (70 checks)
+#   - Replay hash stability: two independent calls produce identical output_hash
+#   - Scenario-specific degraded behavior assertions (100+ total assertions)
+#   - Emergency precedence absolute (INV-7) verified under CHAOS-007 poll storm
+#   - System fallback always resolves (INV-2) verified under CHAOS-001, CHAOS-002
+#   - Clock skew handled gracefully (CHAOS-005)
+#   - Event bus lag override recognition (CHAOS-004)
+#
+# Failure categories:
+#   EXECUTION_ERROR        — PRE.resolve() threw unexpectedly
+#   INVARIANT_VIOLATION    — invariant assertion failed on degraded output
+#   ASSERTION_FAILURE      — scenario-specific behavior assertion failed
+#   HASH_DIVERGENCE        — two runs produced different output_hash (non-deterministic)
+#   VECTOR_FAIL            — test assertion count < expected (100+)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  chaos-smoke:
+    name: "Chaos Smoke (7/7 scenarios required)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: TypeScript Type Check
+        run: npx tsc --noEmit
+        # All chaos types must compile cleanly.
+        # Exit code 1 = type errors. Blocks downstream steps.
+
+      - name: Run Chaos Vector Tests
+        run: npx ts-node scripts/vectors/chaos.vec.ts
+        # Executes all 7 chaos scenarios with 100+ assertions.
+        # Verifies constitutional guarantees under degraded conditions.
+        # Exit code 1 = at least one assertion failed or scenario errored.
+
+      - name: Run Chaos Scenarios (Full Report)
+        run: npx ts-node scripts/run-chaos.ts
+        # Runs all scenarios and writes chaos-output/chaos-report.json.
+        # Exit code 1 = constitutional_status === 'FAIL'.
+        # Subsequent step archives the artifact regardless of pass/fail.
+
+      - name: Upload Chaos Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-report-${{ github.run_id }}
+          path: chaos-output/
+          retention-days: 30
+
+      - name: Upload Chaos Vector Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-vector-output-${{ github.run_id }}
+          path: chaos-output/chaos-report.json
+          retention-days: 30
+          if-no-files-found: warn

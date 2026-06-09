@@ -1,0 +1,9 @@
+# CI Stage 13 — Migration Lint (merge-blocking)
+# Validates all migration files meet constitutional DB requirements
+name: "Stage 13: Migration Lint"
+description: "Constitutional DB requirements: partitioning, append-only, RLS"
+required: true
+blocking: true
+runs:
+  - name: migration-lint
+    command: npx tsx ci/scripts/migration-lint.ts

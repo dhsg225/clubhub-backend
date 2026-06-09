@@ -1,0 +1,9 @@
+# Compose overlay: injects 25s startup delay into cms-api to test ordered startup under slow CMS.
+# screen-init's waitForCmsApi() loop must survive this delay and still enroll successfully.
+# Usage: docker compose -f docker-compose.integration.yml -f docker-compose.fm05-delay.yml ...
+services:
+  cms-api:
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+      - "echo '[fm05] Simulating slow CMS startup — sleeping 25s...' && sleep 25 && node dist/index.js"

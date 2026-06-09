@@ -1,0 +1,40 @@
+name: Canary Gate — Human Authorization Required
+
+on:
+  workflow_dispatch:
+    inputs:
+      canary_stage:
+        description: 'Target canary stage'
+        required: true
+        type: choice
+        options:
+          - SHADOW_ONLY
+          - INTERNAL_CANARY
+          - SINGLE_VENUE
+          - MULTI_VENUE
+          - FLEET_WIDE
+          - AUTHORITATIVE
+      authorization_token:
+        description: 'Human authorization token (required for any stage beyond SHADOW_ONLY, min 8 chars)'
+        required: false
+        type: string
+
+jobs:
+  canary-gate:
+    name: Validate Canary Advancement Prerequisites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Validate canary advancement gate
+        env:
+          CANARY_STAGE: ${{ inputs.canary_stage }}
+          AUTHORIZATION_TOKEN: ${{ inputs.authorization_token }}
+        run: npx tsx ci/scripts/canary-gate.ts

@@ -1,0 +1,13 @@
+{
+  "name": "@clubhub/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "echo 'No typecheck for tsconfig package'"
+  },
+  "exports": {
+    "./base": "./base.json",
+    "./node": "./node.json",
+    "./react": "./react.json"
+  }
+}

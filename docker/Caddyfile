@@ -1,0 +1,62 @@
+# ClubHub TV — Caddy reverse proxy configuration
+#
+# DOMAIN env var is injected by docker-compose.production.yml.
+# When DOMAIN=localhost, Caddy serves plain HTTP (no TLS attempt).
+# When DOMAIN=clubhub.example.com, Caddy auto-provisions Let's Encrypt TLS.
+#
+# Caddy admin API is disabled in production (no runtime config changes needed).
+
+{
+  admin off
+  email  {$CADDY_ACME_EMAIL:-ops@example.com}
+}
+
+{$DOMAIN} {
+
+  # ── API reverse proxy ──────────────────────────────────────────────────────
+  # All /api/* requests are forwarded to the backend.
+  # Clients (player, studio, admin bootstrap) should prefix calls with /api/.
+  handle /api/* {
+    uri strip_prefix /api
+    reverse_proxy backend:4000 {
+      # Health-check the upstream before forwarding
+      health_uri      /health/live
+      health_interval 15s
+      health_timeout  5s
+
+      # Pass real client IP to backend (req.ip in Express)
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # ── Uploaded media (served directly by Caddy, not proxied) ────────────────
+  handle /uploads/* {
+    root * /srv
+    file_server
+  }
+
+  # ── Security headers ───────────────────────────────────────────────────────
+  header {
+    X-Content-Type-Options    nosniff
+    X-Frame-Options           DENY
+    X-XSS-Protection          "1; mode=block"
+    Referrer-Policy           strict-origin-when-cross-origin
+    # Remove server identification
+    -Server
+  }
+
+  # ── Access logging ─────────────────────────────────────────────────────────
+  log {
+    output file /var/log/caddy/access.log {
+      roll_size    50mb
+      roll_keep    5
+      roll_keep_for 720h
+    }
+    format json
+  }
+
+  # ── Compression ────────────────────────────────────────────────────────────
+  encode gzip zstd
+}

@@ -1,0 +1,19 @@
+{
+  "breakpoints": {
+    "rate_limit_screens_per_ip": 30,
+    "db_pool_exhaustion_screens": 150,
+    "log_forensic_gap_screens": 100,
+    "ota_cdn_required_screens": 1000,
+    "cache_tuning_required_screens": 2000,
+    "backend_scale_out_screens": 5000,
+    "db_read_replica_screens": 10000
+  },
+  "projections": {
+    "manifest_size_bytes": 2048,
+    "log_line_bytes": 200,
+    "log_lines_per_screen_per_min": 5,
+    "ota_image_bytes": 20971520,
+    "manifest_cache_row_bytes": 5120,
+    "db_pool_default_size": 10
+  }
+}

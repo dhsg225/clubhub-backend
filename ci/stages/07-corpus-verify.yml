@@ -1,0 +1,86 @@
+name: "Stage 07 — Corpus Integrity Verification"
+
+# Constitutional authority: REFERENCE-STATE-AND-CANONICAL-FIXTURES-v1.md §12
+# Gate type: BLOCKING — failure prevents merge
+#
+# Verifies the cryptographic integrity of every active corpus packet.
+# This stage runs BEFORE the replay harness (Stage 04) and independently
+# to detect corpus tampering without requiring PRE execution.
+#
+# Three-layer hash verification per packet:
+#   1. packet_hash (SHA-256) — whole-packet integrity seal
+#      SHA-256(canonicalizeJson(packet minus packet_hash field))
+#   2. input_hash (FNV-1a 32-bit) — behavioral input fingerprint
+#      fnv1a32(canonicalizeJson(packet.input))
+#   3. output_hash (FNV-1a 32-bit) — behavioral output fingerprint
+#      fnv1a32(canonicalizeJson(packet.expected_output))
+#   4. CORPUS-INDEX.json packet_hash must match file's stored packet_hash
+#
+# Any mismatch = INTEGRITY_FAILURE = merge blocked.
+#
+# This stage also optionally writes a daily snapshot of all file hashes
+# to corpus/integrity/ for audit trail purposes (--snapshot flag).
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Daily at 02:00 UTC — produces integrity snapshot for audit trail
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      write_snapshot:
+        description: 'Write daily integrity snapshot to corpus/integrity/'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  corpus-integrity:
+    name: "Corpus Hash Verification (9/9 required)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Verify Corpus Integrity
+        run: npx ts-node scripts/verify-corpus-integrity.ts
+        # Verifies all three hash layers for every active packet.
+        # Exit code 1 = integrity failure. Merge blocked.
+
+      - name: Write Integrity Snapshot (scheduled or requested)
+        if: github.event_name == 'schedule' || inputs.write_snapshot == 'true'
+        run: npx ts-node scripts/verify-corpus-integrity.ts --snapshot
+        # Writes corpus/integrity/corpus-checksum-YYYY-MM-DD.sha256
+        # Used for long-term audit trail of corpus state.
+
+      - name: Commit Integrity Snapshot
+        if: github.event_name == 'schedule'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add corpus/integrity/
+          git diff --cached --quiet || git commit -m "chore(corpus): daily integrity snapshot $(date -u +%Y-%m-%d)"
+          git push
+        # Only runs on scheduled runs. Commits the snapshot file so
+        # corpus integrity history is preserved in git history.
+
+      - name: Upload Verification Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-integrity-report-${{ github.run_id }}
+          path: corpus/integrity/
+          retention-days: 90

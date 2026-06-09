@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-ingress
+  namespace: clubhub
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # Constitutional: /emergency/* routes must always be reachable in READ_ONLY state
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      # Emergency routes bypass rate limiting
+      if ($request_uri ~* ^/api/v2/emergency/) {
+        set $skip_rate_limit 1;
+      }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.clubhub.internal
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 4000

@@ -1,0 +1,91 @@
+name: ClubHub TV Chaos Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # ── Stage 1: Contract Validation ─────────────────────────────────────────
+  # Runs before any tests. Verifies that CLUBHUB_SYSTEM_CONTRACTS.md is the
+  # single source of truth: thresholds.json matches §3.2, all declared gates
+  # are enforced in runner.js, and no hardcoded threshold values exist in
+  # test runner source.
+  #
+  # A failure here is a deploy blocker per DB-4 / DB-12. No downstream job
+  # runs until this passes.
+  validate-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Validate Contracts
+        run: node test-runner/contracts/validate-contracts.js --ci
+
+      - name: Upload Contract Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-validation-report
+          path: reports/contract-validation.json
+
+  # ── Stage 2: Chaos Test Suites ───────────────────────────────────────────
+  # All three suites must pass. Uses deterministic mode (DETERMINISTIC=true,
+  # seed=12345) per §3.3. Threshold gating in runner.js enforces §3.2 values.
+  chaos-test-suite:
+    runs-on: ubuntu-latest
+    needs: validate-contracts   # HARD DEPENDENCY — contracts must pass first
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [basic, chaos, stress]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Start Services (Docker Compose)
+        run: |
+          docker compose up -d postgres backend
+          # Wait for backend health (60s timeout per §3.1)
+          timeout 60s bash -c 'until curl -s http://localhost:4000/health; do sleep 2; done'
+
+      - name: Seed Database
+        run: make seed
+
+      - name: Run Chaos Test Suite (${{ matrix.suite }})
+        run: |
+          # Deterministic mode required per §3.3 — seed=12345 is the CI canonical seed
+          node test-runner/runner.js --suite=${{ matrix.suite }} --ci --deterministic --seed=12345
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-report-${{ matrix.suite }}
+          path: reports/
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

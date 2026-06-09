@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "profile": "PRODUCTION",
+  "required_certifications": [
+    { "phase": "a7", "min_pass": 54, "blocking": true },
+    { "phase": "a8", "min_pass": 56, "blocking": true },
+    { "phase": "a9", "min_pass": 70, "blocking": true },
+    { "phase": "a10","min_pass": 80, "blocking": true }
+  ],
+  "enforcement": "STRICT",
+  "allow_degraded_start": false,
+  "replay_validation_on_startup": true
+}

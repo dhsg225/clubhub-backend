@@ -1,0 +1,24 @@
+name: Migration Lint — Constitutional DB Requirements
+
+on:
+  pull_request:
+    paths:
+      - 'services/*/migrations/**'
+      - 'ci/scripts/migration-lint.ts'
+
+jobs:
+  migration-lint:
+    name: Validate Migration Files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: npx tsx ci/scripts/migration-lint.ts
+        name: Lint migrations for constitutional DB requirements

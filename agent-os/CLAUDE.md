@@ -164,6 +164,10 @@ These modules are governance primitives. Autonomous agents **must not modify** t
 - `HACK_KERNEL` string in `ControlPlaneCertification.js` is an intentional invalid value in a guard test — do not remove.
 - `replay-cache.ts:36` throws at 50MB corpus cap — this is an operational constraint, not a bug. See BL-007.
 
+## Port Allocation
+
+See `PORT_ALLOCATION_STANDARD.md` at project root. Port 3000 is **reserved/forbidden** — too many tools default there. api-gateway is on 3001. Check before starting any local process.
+
 ## Running the App
 
 ```bash

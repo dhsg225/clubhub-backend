@@ -1,0 +1,198 @@
+{
+  "run_id": "2026-05-14T22-08-52-753Z",
+  "suite": "Stress Testing",
+  "timestamp": "2026-05-14T22:12:29.662Z",
+  "duration_ms": 216908,
+  "summary": {
+    "total": 13,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "status": "PASS"
+  },
+  "metrics": {
+    "total_screens": 10,
+    "poll_success_rate": 100,
+    "p95_latency_ms": 24,
+    "max_offline_streak": 0,
+    "desync_count": 0,
+    "recovery_score": 100,
+    "screens": [
+      {
+        "id": "test-screen-02",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-07",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-08",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-04",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-09",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-01",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-06",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-05",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-10",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      },
+      {
+        "id": "test-screen-03",
+        "success_count": 4,
+        "failure_count": 0,
+        "last_checksum": "e44b6a01",
+        "versions_seen": 1,
+        "checksums_seen": 1
+      }
+    ]
+  },
+  "tests": [
+    {
+      "name": "health_check",
+      "status": "passed",
+      "duration_ms": 34,
+      "metrics": {}
+    },
+    {
+      "name": "cold_start",
+      "status": "passed",
+      "duration_ms": 1001,
+      "metrics": {
+        "spread": null
+      }
+    },
+    {
+      "name": "manifest_delivery",
+      "status": "passed",
+      "duration_ms": 15058,
+      "metrics": {}
+    },
+    {
+      "name": "fallback_promotion",
+      "status": "passed",
+      "duration_ms": 28,
+      "metrics": {}
+    },
+    {
+      "name": "cache_persistence",
+      "status": "passed",
+      "duration_ms": 19026,
+      "metrics": {
+        "recoveryTime": 18558
+      }
+    },
+    {
+      "name": "backend_restart_recovery",
+      "status": "passed",
+      "duration_ms": 14550,
+      "metrics": {
+        "recoveryTime": 14534
+      }
+    },
+    {
+      "name": "db_restart_recovery",
+      "status": "passed",
+      "duration_ms": 15627,
+      "metrics": {
+        "recoveryTime": 14990
+      }
+    },
+    {
+      "name": "network_outage_30s",
+      "status": "passed",
+      "duration_ms": 39788,
+      "metrics": {}
+    },
+    {
+      "name": "content_churn_version_tracking",
+      "status": "passed",
+      "duration_ms": 32743,
+      "metrics": {}
+    },
+    {
+      "name": "flood_recovery",
+      "status": "passed",
+      "duration_ms": 19028,
+      "metrics": {
+        "spread": 11339
+      }
+    },
+    {
+      "name": "sustained_load_60s",
+      "status": "passed",
+      "duration_ms": 60003,
+      "metrics": {
+        "successRate": 100,
+        "p95": 24
+      }
+    },
+    {
+      "name": "poll_drift",
+      "status": "passed",
+      "duration_ms": 0,
+      "metrics": {
+        "avgInterval": null
+      }
+    },
+    {
+      "name": "cache_coherence",
+      "status": "passed",
+      "duration_ms": 12,
+      "metrics": {}
+    }
+  ]
+}

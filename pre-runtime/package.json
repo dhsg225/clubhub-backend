@@ -1,0 +1,27 @@
+{
+  "name": "pre-runtime",
+  "version": "1.0.0",
+  "description": "PRE execution, replay, and verification engine — ClubHub TV",
+  "private": true,
+  "scripts": {
+    "example:nominal": "ts-node examples/nominal-run.ts",
+    "example:divergence": "ts-node examples/divergence-detection.ts",
+    "emergency-demo": "ts-node examples/emergency-override-observability-demo.ts",
+    "emergency-scenario": "ts-node examples/emergency-override-scenario.ts",
+    "emergency-test": "ts-node examples/emergency-override-replay-test.ts",
+    "workflow:schedule-demo": "ts-node examples/scheduled-content-observability-demo.ts",
+    "workflow:schedule-test": "ts-node examples/scheduled-content-replay-test.ts",
+    "workflow:incident-demo": "ts-node examples/incident-escalation-observability-demo.ts",
+    "workflow:incident-test": "ts-node examples/incident-escalation-replay-test.ts",
+    "workflow:disconnect-demo": "ts-node examples/venue-disconnect-observability-demo.ts",
+    "workflow:disconnect-test": "ts-node examples/venue-disconnect-replay-test.ts",
+    "workflow:collision-demo": "ts-node examples/multi-operator-collision-observability-demo.ts",
+    "workflow:collision-test": "ts-node examples/multi-operator-collision-replay-test.ts",
+    "workflow:all-tests": "ts-node examples/scheduled-content-replay-test.ts && ts-node examples/incident-escalation-replay-test.ts && ts-node examples/venue-disconnect-replay-test.ts && ts-node examples/multi-operator-collision-replay-test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}

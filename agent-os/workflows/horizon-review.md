@@ -13,11 +13,8 @@ Before any horizon thinking, the agent must be anchored in reality. Run this bef
 2. Read BACKLOG.md (active items)    — what's being built right now and next
 3. Read DECISIONS.md                 — what's already settled (don't re-litigate these)
 4. Read HORIZON.md                   — open questions and ideas already in flight
-5. Skim key architecture files:
-   - lib/events/emitBusinessEvent.ts
-   - lib/events/eventRouter.ts
-   - lib/actions/executionDispatcher.ts
-   - lib/db/schema.ts (table list only)
+5. Skim key architecture files relevant to the question at hand
+   (check CLAUDE.md §Project Structure for entry points and key files)
 ```
 
 **Rule**: Do not engage with product or architecture questions until the grounding step is complete. A horizon agent that hasn't read the code will validate bad ideas instead of stress-testing them.

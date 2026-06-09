@@ -1,0 +1,24 @@
+name: Constitutional Check
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  constitutional:
+    name: Constitutional Boundary Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Forbidden pattern scan (FP-01-25)
+        run: pnpm constitutional:check
+      - name: PRE boundary check
+        run: pnpm constitutional:boundary
+      - name: TypeScript check (all packages)
+        run: pnpm typecheck

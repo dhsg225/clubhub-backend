@@ -1,0 +1,196 @@
+{
+  "generated_at": "2026-06-09T09:25:39.461Z",
+  "evidence_source": null,
+  "thresholds": [
+    {
+      "threshold_key": "performance.min_poll_success_rate",
+      "metric": "Poll success rate",
+      "section": "§3.2",
+      "deploy_blocker": "DB-7",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "pollSuccessRate()",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "basic",
+          "chaos",
+          "stress"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "summary.poll_success_rate",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "performance.max_p95_latency_ms",
+      "metric": "P95 poll latency",
+      "section": "§3.2",
+      "deploy_blocker": "DB-2",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "p95PollLatency()",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "basic",
+          "chaos",
+          "stress"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "summary.p95_latency_ms",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "performance.max_poll_drift_ms",
+      "metric": "Poll drift",
+      "section": "§3.2",
+      "deploy_blocker": "DB-2",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "pollDriftMs()",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "stress"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "summary.max_poll_drift_ms",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "coherence.max_desync_count",
+      "metric": "Desync count",
+      "section": "§3.2",
+      "deploy_blocker": "DB-3",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "getDesyncCount()",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "chaos",
+          "stress"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "summary.desync_count",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "coherence.max_desync_duration_ms",
+      "metric": "Desync duration",
+      "section": "§3.2",
+      "deploy_blocker": "DB-2",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "_maxDesyncDurationMs",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "chaos",
+          "stress"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "summary.max_desync_duration_ms",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "recovery.backend_restart_ms",
+      "metric": "Backend recovery time",
+      "section": "§3.2",
+      "deploy_blocker": "DB-4",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "recordNamedRecovery",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "chaos"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "nr.backend_restart",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "recovery.db_restart_ms",
+      "metric": "DB recovery time",
+      "section": "§3.2",
+      "deploy_blocker": "DB-9",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "recordNamedRecovery",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "chaos"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "nr.db_restart",
+        "found": true
+      },
+      "evidence_observed": null
+    },
+    {
+      "threshold_key": "recovery.network_outage_recovery_ms",
+      "metric": "Network outage recovery",
+      "section": "§3.2",
+      "deploy_blocker": "DB-4",
+      "producer": {
+        "file": "test-runner/lib/metrics.js",
+        "pattern": "recordNamedRecovery",
+        "found": true
+      },
+      "suite_coverage": {
+        "suites": [
+          "chaos"
+        ],
+        "found": true
+      },
+      "runner_enforcement": {
+        "file": "test-runner/runner.js",
+        "pattern": "nr.network_outage",
+        "found": true
+      },
+      "evidence_observed": null
+    }
+  ]
+}

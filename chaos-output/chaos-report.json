@@ -1,0 +1,2130 @@
+{
+  "run_id": "8fb795fc",
+  "executed_at": 1748390400000,
+  "total_scenarios": 7,
+  "passed": 7,
+  "failed": 0,
+  "execution_errors": 0,
+  "results": [
+    {
+      "scenario_id": "CHAOS-001",
+      "scenario_name": "Backend Restart — Delivery Log Cleared",
+      "degradation_class": "BACKEND_RESTART",
+      "conditions": {
+        "class": "BACKEND_RESTART",
+        "description": "Backend restarted — delivery log cleared. last_delivery set to null.",
+        "injected_faults": [
+          "last_delivery: null"
+        ],
+        "fault_at": 1748390400000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748390400000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": null,
+          "overrides": [],
+          "schedules": [],
+          "campaigns": [],
+          "content_items": [],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748390400000,
+        "resolution_level": 5,
+        "is_fallback": true,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "system:fallback:v1",
+            "duration_ms": 30000,
+            "weight": 100,
+            "source": 5,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 0,
+          "sponsor_pct": 0,
+          "override_pct": 0,
+          "fallback_pct": 0,
+          "system_pct": 1
+        },
+        "reason_trace": {
+          "level_0_emergency": null,
+          "level_1_operational": null,
+          "level_2_scheduled": null,
+          "level_3_campaign": null,
+          "level_4_sponsorship": null,
+          "level_5_structural": {
+            "outcome": "RESOLVED",
+            "reason": "L5:SYSTEM_FALLBACK:no_content_sources_active"
+          },
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "50d2bc6f",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "9100854e",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=5"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"50d2bc6f\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_5, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (0 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "No active emergency: INV-7 vacuously satisfied"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=1.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "9100854e",
+            "run_2": "9100854e"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: 9100854e"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "confidence_score === 0.5",
+          "passed": true,
+          "actual": 0.5,
+          "expected": 0.5,
+          "detail": "confidence_score is exactly 0.5"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 12,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-001",
+        "input_hash": "2bc41bb5",
+        "output_hash": "9100854e",
+        "conditions_hash": "90cc70ea",
+        "run_1_output_hash": "9100854e",
+        "run_2_output_hash": "9100854e",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-001",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-001",
+            "resolution_level": 5,
+            "is_fallback": true,
+            "at": 1748390400000
+          },
+          {
+            "type": "fallback_resolution_used",
+            "scenario_id": "CHAOS-001",
+            "reason": "L5:SYSTEM_FALLBACK:no_content_sources_active",
+            "at": 1748390400000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-001",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748390400000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-001",
+            "status": "PASS",
+            "at": 1748390400000
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "CHAOS-002",
+      "scenario_name": "DB Restart — Stale Read Window",
+      "degradation_class": "DB_RESTART_STALE_READ",
+      "conditions": {
+        "class": "DB_RESTART_STALE_READ",
+        "description": "DB restarted — stale read returned inactive schedules. All schedules set is_active: false. Overrides cleared. last_delivery null.",
+        "injected_faults": [
+          "schedules[*].is_active: false",
+          "overrides: []",
+          "last_delivery: null"
+        ],
+        "fault_at": 1748390400000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748390400000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": null,
+          "overrides": [],
+          "schedules": [
+            {
+              "id": "chaos-schedule-001",
+              "campaign_id": null,
+              "content_id": "chaos-content-a",
+              "target_type": "venue",
+              "target_id": "chaos-venue-001",
+              "specificity": 1,
+              "starts_at": 1748386800000,
+              "expires_at": 1748397600000,
+              "days_of_week": [],
+              "start_time_minutes": null,
+              "end_time_minutes": null,
+              "is_active": false,
+              "is_fallback": false,
+              "priority": 10
+            }
+          ],
+          "campaigns": [],
+          "content_items": [
+            {
+              "id": "chaos-content-a",
+              "duration_ms": 15000,
+              "type": "video",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-b",
+              "duration_ms": 10000,
+              "type": "image",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-c",
+              "duration_ms": 20000,
+              "type": "video",
+              "is_active": true
+            }
+          ],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748390400000,
+        "resolution_level": 5,
+        "is_fallback": true,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "system:fallback:v1",
+            "duration_ms": 30000,
+            "weight": 100,
+            "source": 5,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 0,
+          "sponsor_pct": 0,
+          "override_pct": 0,
+          "fallback_pct": 0,
+          "system_pct": 1
+        },
+        "reason_trace": {
+          "level_0_emergency": null,
+          "level_1_operational": null,
+          "level_2_scheduled": null,
+          "level_3_campaign": null,
+          "level_4_sponsorship": null,
+          "level_5_structural": {
+            "outcome": "RESOLVED",
+            "reason": "L5:SYSTEM_FALLBACK:no_content_sources_active"
+          },
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "50d2bc6f",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "9100854e",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=5"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"50d2bc6f\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_5, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (3 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "No active emergency: INV-7 vacuously satisfied"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=1.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "9100854e",
+            "run_2": "9100854e"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: 9100854e"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "resolution_level === 5",
+          "passed": true,
+          "actual": 5,
+          "expected": 5,
+          "detail": "resolution_level is LEVEL_5"
+        },
+        {
+          "assertion": "is_fallback === true",
+          "passed": true,
+          "actual": true,
+          "expected": true,
+          "detail": "is_fallback is true"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 1,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-002",
+        "input_hash": "2a10d596",
+        "output_hash": "9100854e",
+        "conditions_hash": "e8761c26",
+        "run_1_output_hash": "9100854e",
+        "run_2_output_hash": "9100854e",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-002",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-002",
+            "resolution_level": 5,
+            "is_fallback": true,
+            "at": 1748390400000
+          },
+          {
+            "type": "fallback_resolution_used",
+            "scenario_id": "CHAOS-002",
+            "reason": "L5:SYSTEM_FALLBACK:no_content_sources_active",
+            "at": 1748390400000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-002",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748390400000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-002",
+            "status": "PASS",
+            "at": 1748390400000
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "CHAOS-003",
+      "scenario_name": "Cache Loss — Empty Content Items",
+      "degradation_class": "CACHE_LOSS",
+      "conditions": {
+        "class": "CACHE_LOSS",
+        "description": "Cache evicted — content_items cleared to empty array. Schedules still reference content_ids that no longer exist in state.",
+        "injected_faults": [
+          "content_items: []"
+        ],
+        "fault_at": 1748390400000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748390400000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": null,
+          "overrides": [],
+          "schedules": [
+            {
+              "id": "chaos-schedule-001",
+              "campaign_id": null,
+              "content_id": "chaos-content-a",
+              "target_type": "venue",
+              "target_id": "chaos-venue-001",
+              "specificity": 1,
+              "starts_at": 1748386800000,
+              "expires_at": 1748397600000,
+              "days_of_week": [],
+              "start_time_minutes": null,
+              "end_time_minutes": null,
+              "is_active": true,
+              "is_fallback": false,
+              "priority": 10
+            }
+          ],
+          "campaigns": [],
+          "content_items": [],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748390400000,
+        "resolution_level": 3,
+        "is_fallback": false,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "system:fallback:v1",
+            "duration_ms": 30000,
+            "weight": 10,
+            "source": 3,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 1,
+          "sponsor_pct": 0,
+          "override_pct": 0,
+          "fallback_pct": 0,
+          "system_pct": 0
+        },
+        "reason_trace": {
+          "level_0_emergency": null,
+          "level_1_operational": null,
+          "level_2_scheduled": null,
+          "level_3_campaign": {
+            "outcome": "RESOLVED",
+            "reason": "L3:CAMPAIGN:schedule_id=chaos-schedule-001,campaign=unknown,specificity=VENUE,won_by=only_active_rule",
+            "campaign_id": null,
+            "campaign_name": null,
+            "schedule_id": "chaos-schedule-001",
+            "specificity": 1,
+            "won_by": "only_active_rule"
+          },
+          "level_4_sponsorship": {
+            "outcome": "SKIP",
+            "reason": "L4:SKIP:no_active_sponsorship_contracts",
+            "contracts_active": 0,
+            "total_sov_pct": 0,
+            "sov_warning_active": false,
+            "injected_items": 0
+          },
+          "level_5_structural": {
+            "outcome": "RESOLVED",
+            "reason": "L5:NORMALIZED:1_item,source=campaign"
+          },
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "77c78fc3",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "ea76de2f",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=3"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"77c78fc3\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_3, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (1 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "No active emergency: INV-7 vacuously satisfied"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=1.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "ea76de2f",
+            "run_2": "ea76de2f"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: ea76de2f"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "assertCacheAbsenceNoAuthorityChange",
+          "passed": true,
+          "actual": [],
+          "expected": "all content_ids in [system:fallback:v1, system:emergency-fallback:v1]",
+          "detail": "All playlist items use valid system fallback IDs when content_items is empty"
+        },
+        {
+          "assertion": "all_playlist_content_ids_valid",
+          "passed": true,
+          "actual": "all valid",
+          "expected": "all content_ids in state or system fallback IDs",
+          "detail": "All playlist content_ids are valid"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 1,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-003",
+        "input_hash": "40ee07fb",
+        "output_hash": "ea76de2f",
+        "conditions_hash": "af364e31",
+        "run_1_output_hash": "ea76de2f",
+        "run_2_output_hash": "ea76de2f",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-003",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-003",
+            "resolution_level": 3,
+            "is_fallback": false,
+            "at": 1748390400000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-003",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748390400000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-003",
+            "status": "PASS",
+            "at": 1748390400000
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "CHAOS-004",
+      "scenario_name": "Event Bus Lag — Delayed Override Delivery",
+      "degradation_class": "EVENT_BUS_LAG",
+      "conditions": {
+        "class": "EVENT_BUS_LAG",
+        "description": "Event bus lagged 1800000ms. Override starts_at = at - lag, expires_at = at + lag. Override still valid per half-open interval. last_delivery cleared.",
+        "injected_faults": [
+          "overrides[0].starts_at: at - 1800000ms (lagged delivery)",
+          "overrides[0].expires_at: at + 1800000ms",
+          "overrides[0].is_operational: true",
+          "last_delivery: null"
+        ],
+        "fault_at": 1748390400000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748390400000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": null,
+          "overrides": [
+            {
+              "id": "lag-override-001",
+              "content_id": "chaos-content-b",
+              "is_operational": true,
+              "target_type": "venue",
+              "target_id": "chaos-venue-001",
+              "starts_at": 1748388600000,
+              "expires_at": 1748392200000,
+              "priority": 100,
+              "reason": "event-bus-lag-test",
+              "issued_by": "chaos-004"
+            }
+          ],
+          "schedules": [],
+          "campaigns": [],
+          "content_items": [
+            {
+              "id": "chaos-content-a",
+              "duration_ms": 15000,
+              "type": "video",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-b",
+              "duration_ms": 10000,
+              "type": "image",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-c",
+              "duration_ms": 20000,
+              "type": "video",
+              "is_active": true
+            }
+          ],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748390400000,
+        "resolution_level": 1,
+        "is_fallback": false,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "chaos-content-b",
+            "duration_ms": 10000,
+            "weight": 100,
+            "source": 1,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 0,
+          "sponsor_pct": 0,
+          "override_pct": 1,
+          "fallback_pct": 0,
+          "system_pct": 0
+        },
+        "reason_trace": {
+          "level_0_emergency": null,
+          "level_1_operational": {
+            "outcome": "RESOLVED",
+            "reason": "L1:OPERATIONAL_OVERRIDE:id=lag-override-001,target=chaos-venue-001,reason=event-bus-lag-test",
+            "override_id": "lag-override-001",
+            "content_id": "chaos-content-b"
+          },
+          "level_2_scheduled": null,
+          "level_3_campaign": null,
+          "level_4_sponsorship": null,
+          "level_5_structural": null,
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "e38ea2a2",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "8ae33d31",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=1"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"e38ea2a2\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_1, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (3 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "No active emergency: INV-7 vacuously satisfied"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=1.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "8ae33d31",
+            "run_2": "8ae33d31"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: 8ae33d31"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "resolution_level === 1",
+          "passed": true,
+          "actual": 1,
+          "expected": 1,
+          "detail": "resolution_level is LEVEL_1"
+        },
+        {
+          "assertion": "is_fallback === false",
+          "passed": true,
+          "actual": false,
+          "expected": false,
+          "detail": "is_fallback is false"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 1,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-004",
+        "input_hash": "94e3324e",
+        "output_hash": "8ae33d31",
+        "conditions_hash": "e48eb41e",
+        "run_1_output_hash": "8ae33d31",
+        "run_2_output_hash": "8ae33d31",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-004",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-004",
+            "resolution_level": 1,
+            "is_fallback": false,
+            "at": 1748390400000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-004",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748390400000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-004",
+            "status": "PASS",
+            "at": 1748390400000
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "CHAOS-005",
+      "scenario_name": "Clock Skew — Far-Future Evaluation Timestamp",
+      "degradation_class": "CLOCK_SKEW",
+      "conditions": {
+        "class": "CLOCK_SKEW",
+        "description": "Clock skewed 7200000ms forward. schedules[*].expires_at = skewedAt - 1000 (all expired). overrides: [] (cleared). Evaluation uses skewedAt.",
+        "injected_faults": [
+          "at: at + 7200000 (clock skew applied to evaluation timestamp)",
+          "schedules[*].expires_at: skewedAt - 1000 (expired before skewed evaluation time)",
+          "overrides: [] (cleared)"
+        ],
+        "fault_at": 1748397600000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748397600000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": null,
+          "overrides": [],
+          "schedules": [
+            {
+              "id": "chaos-schedule-001",
+              "campaign_id": null,
+              "content_id": "chaos-content-a",
+              "target_type": "venue",
+              "target_id": "chaos-venue-001",
+              "specificity": 1,
+              "starts_at": 1748386800000,
+              "expires_at": 1748397599000,
+              "days_of_week": [],
+              "start_time_minutes": null,
+              "end_time_minutes": null,
+              "is_active": true,
+              "is_fallback": false,
+              "priority": 10
+            }
+          ],
+          "campaigns": [],
+          "content_items": [
+            {
+              "id": "chaos-content-a",
+              "duration_ms": 15000,
+              "type": "video",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-b",
+              "duration_ms": 10000,
+              "type": "image",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-c",
+              "duration_ms": 20000,
+              "type": "video",
+              "is_active": true
+            }
+          ],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748397600000,
+        "resolution_level": 5,
+        "is_fallback": true,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "system:fallback:v1",
+            "duration_ms": 30000,
+            "weight": 100,
+            "source": 5,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 0,
+          "sponsor_pct": 0,
+          "override_pct": 0,
+          "fallback_pct": 0,
+          "system_pct": 1
+        },
+        "reason_trace": {
+          "level_0_emergency": null,
+          "level_1_operational": null,
+          "level_2_scheduled": null,
+          "level_3_campaign": null,
+          "level_4_sponsorship": null,
+          "level_5_structural": {
+            "outcome": "RESOLVED",
+            "reason": "L5:SYSTEM_FALLBACK:no_content_sources_active"
+          },
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "50d2bc6f",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "98ea0201",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=5"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"50d2bc6f\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_5, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (3 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "No active emergency: INV-7 vacuously satisfied"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=1.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "98ea0201",
+            "run_2": "98ea0201"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: 98ea0201"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "is_fallback === true",
+          "passed": true,
+          "actual": true,
+          "expected": true,
+          "detail": "is_fallback is true"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 1,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-005",
+        "input_hash": "0521fea5",
+        "output_hash": "98ea0201",
+        "conditions_hash": "0016d28a",
+        "run_1_output_hash": "98ea0201",
+        "run_2_output_hash": "98ea0201",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-005",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-005",
+            "resolution_level": 5,
+            "is_fallback": true,
+            "at": 1748397600000
+          },
+          {
+            "type": "fallback_resolution_used",
+            "scenario_id": "CHAOS-005",
+            "reason": "L5:SYSTEM_FALLBACK:no_content_sources_active",
+            "at": 1748397600000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-005",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748397600000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-005",
+            "status": "PASS",
+            "at": 1748397600000
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "CHAOS-006",
+      "scenario_name": "Poll Storm — Rapid Sequential Evaluation",
+      "degradation_class": "POLL_STORM",
+      "conditions": {
+        "class": "POLL_STORM",
+        "description": "Poll storm: PRE called 10 times in rapid succession. Timestamps: at+0ms through at+9ms. All outputs must have identical output_hash.",
+        "injected_faults": [
+          "evaluation_count: 10",
+          "at_offsets: 0ms through 9ms"
+        ],
+        "fault_at": 1748390400000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748390400000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": null,
+          "overrides": [],
+          "schedules": [
+            {
+              "id": "chaos-schedule-001",
+              "campaign_id": null,
+              "content_id": "chaos-content-a",
+              "target_type": "venue",
+              "target_id": "chaos-venue-001",
+              "specificity": 1,
+              "starts_at": 1748386800000,
+              "expires_at": 1748397600000,
+              "days_of_week": [],
+              "start_time_minutes": null,
+              "end_time_minutes": null,
+              "is_active": true,
+              "is_fallback": false,
+              "priority": 10
+            }
+          ],
+          "campaigns": [],
+          "content_items": [
+            {
+              "id": "chaos-content-a",
+              "duration_ms": 15000,
+              "type": "video",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-b",
+              "duration_ms": 10000,
+              "type": "image",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-c",
+              "duration_ms": 20000,
+              "type": "video",
+              "is_active": true
+            }
+          ],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748390400000,
+        "resolution_level": 3,
+        "is_fallback": false,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "chaos-content-a",
+            "duration_ms": 15000,
+            "weight": 10,
+            "source": 3,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 1,
+          "sponsor_pct": 0,
+          "override_pct": 0,
+          "fallback_pct": 0,
+          "system_pct": 0
+        },
+        "reason_trace": {
+          "level_0_emergency": null,
+          "level_1_operational": null,
+          "level_2_scheduled": null,
+          "level_3_campaign": {
+            "outcome": "RESOLVED",
+            "reason": "L3:CAMPAIGN:schedule_id=chaos-schedule-001,campaign=unknown,specificity=VENUE,won_by=only_active_rule",
+            "campaign_id": null,
+            "campaign_name": null,
+            "schedule_id": "chaos-schedule-001",
+            "specificity": 1,
+            "won_by": "only_active_rule"
+          },
+          "level_4_sponsorship": {
+            "outcome": "SKIP",
+            "reason": "L4:SKIP:no_active_sponsorship_contracts",
+            "contracts_active": 0,
+            "total_sov_pct": 0,
+            "sov_warning_active": false,
+            "injected_items": 0
+          },
+          "level_5_structural": {
+            "outcome": "RESOLVED",
+            "reason": "L5:NORMALIZED:1_item,source=campaign"
+          },
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "07172d5e",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "d076f16b",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=3"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"07172d5e\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_3, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (3 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "No active emergency: INV-7 vacuously satisfied"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=1.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "d076f16b",
+            "run_2": "d076f16b"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: d076f16b"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "assertOutputOrdering",
+          "passed": true,
+          "actual": [
+            3
+          ],
+          "expected": "non-decreasing source values",
+          "detail": "Playlist ordering is valid"
+        },
+        {
+          "assertion": "all_poll_storm_outputs_hash_identical",
+          "passed": true,
+          "actual": [
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e",
+            "07172d5e"
+          ],
+          "expected": "all 10 playlist_checksums === 07172d5e",
+          "detail": "All 10 poll storm outputs have identical playlist_checksum: 07172d5e"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 1,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-006",
+        "input_hash": "419d1da5",
+        "output_hash": "d076f16b",
+        "conditions_hash": "44b2f01e",
+        "run_1_output_hash": "d076f16b",
+        "run_2_output_hash": "d076f16b",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-006",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-006",
+            "resolution_level": 3,
+            "is_fallback": false,
+            "at": 1748390400000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-006",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748390400000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-006",
+            "status": "PASS",
+            "at": 1748390400000
+          }
+        ]
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "CHAOS-007",
+      "scenario_name": "Emergency During Poll Storm — Absolute Precedence Verification",
+      "degradation_class": "EMERGENCY_DURING_POLL_STORM",
+      "conditions": {
+        "class": "EMERGENCY_DURING_POLL_STORM",
+        "description": "Emergency injected at at - 5min. PRE called 10 times in rapid succession. All outputs must be LEVEL_0 with identical hash.",
+        "injected_faults": [
+          "emergency.is_active: true",
+          "emergency.activated_at: at - 300000ms (5 minutes before)",
+          "evaluation_count: 10",
+          "at_offsets: 0ms through 9ms"
+        ],
+        "fault_at": 1748390400000
+      },
+      "pre_input": {
+        "screen_id": "chaos-screen-001",
+        "at": 1748390400000,
+        "system_state": {
+          "screen": {
+            "id": "chaos-screen-001",
+            "tv_group_id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "status": "active",
+            "last_seen_at": null,
+            "last_checksum": null
+          },
+          "tv_group": {
+            "id": "chaos-tvg-001",
+            "area_id": "chaos-area-001",
+            "name": "Chaos Test Group"
+          },
+          "area": {
+            "id": "chaos-area-001",
+            "venue_id": "chaos-venue-001",
+            "name": "Chaos Test Area"
+          },
+          "venue": {
+            "id": "chaos-venue-001",
+            "name": "Chaos Test Venue",
+            "timezone": "America/Chicago",
+            "is_active": true,
+            "org_id": "chaos-org-001"
+          },
+          "organization": {
+            "id": "chaos-org-001",
+            "name": "Chaos Test Organization"
+          },
+          "emergency": {
+            "id": "chaos-emergency-001",
+            "venue_id": "chaos-venue-001",
+            "content_id": "chaos-content-a",
+            "is_global": false,
+            "is_active": true,
+            "activated_at": 1748390100000,
+            "reason": "chaos-fault-injected-emergency"
+          },
+          "overrides": [],
+          "schedules": [],
+          "campaigns": [],
+          "content_items": [
+            {
+              "id": "chaos-content-a",
+              "duration_ms": 15000,
+              "type": "video",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-b",
+              "duration_ms": 10000,
+              "type": "image",
+              "is_active": true
+            },
+            {
+              "id": "chaos-content-c",
+              "duration_ms": 20000,
+              "type": "video",
+              "is_active": true
+            }
+          ],
+          "sponsorships": [],
+          "last_delivery": null
+        }
+      },
+      "pre_output": {
+        "screen_id": "chaos-screen-001",
+        "resolved_at": 1748390400000,
+        "resolution_level": 0,
+        "is_fallback": false,
+        "confidence_score": 0.5,
+        "playlist": [
+          {
+            "content_id": "chaos-content-a",
+            "duration_ms": 15000,
+            "weight": 100,
+            "source": 0,
+            "sponsored": false
+          }
+        ],
+        "content_mix": {
+          "campaign_pct": 0,
+          "sponsor_pct": 0,
+          "override_pct": 0,
+          "fallback_pct": 0,
+          "system_pct": 0
+        },
+        "reason_trace": {
+          "level_0_emergency": {
+            "outcome": "RESOLVED",
+            "reason": "L0:EMERGENCY:id=chaos-emergency-001,venue-scoped,reason=chaos-fault-injected-emergency",
+            "emergency_id": "chaos-emergency-001",
+            "content_id": "chaos-content-a"
+          },
+          "level_1_operational": null,
+          "level_2_scheduled": null,
+          "level_3_campaign": null,
+          "level_4_sponsorship": null,
+          "level_5_structural": null,
+          "level_6_device_truth": {
+            "outcome": "RESOLVED",
+            "reason": "L6:CONFIDENCE:0.5000,no_delivery_log",
+            "confidence_score": 0.5,
+            "last_seen_ms_ago": null,
+            "checksum_match": false
+          }
+        },
+        "playlist_checksum": "00dce81d",
+        "version": 1,
+        "output_schema_version": "1.0.0"
+      },
+      "output_hash": "b485b67e",
+      "invariant_results": [
+        {
+          "invariantId": "INV-1",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Purity contract holds: screen_id, resolved_at, and schema_version are consistent with input"
+        },
+        {
+          "invariantId": "INV-2",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output is valid: non-null, non-empty playlist (1 items), resolution_level=0"
+        },
+        {
+          "invariantId": "INV-3",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Determinism contract holds: checksum=\"00dce81d\", version=1"
+        },
+        {
+          "invariantId": "INV-4",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "First delivery: version=1 (correct)"
+        },
+        {
+          "invariantId": "INV-5",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Level termination holds: resolves at LEVEL_0, trace consistent"
+        },
+        {
+          "invariantId": "INV-6",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "No amplification: all 1 playlist content_ids are present in input system_state (3 active content_ids)"
+        },
+        {
+          "invariantId": "INV-7",
+          "passed": true,
+          "severity": "CATASTROPHIC",
+          "message": "Emergency absoluteness holds: LEVEL_0 resolution, emergency content \"chaos-content-a\" is sole playlist item"
+        },
+        {
+          "invariantId": "INV-8",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Sponsorship non-penetration holds: sponsor_pct=0, sov_warning_active=false, content_mix_sum=0.0000"
+        },
+        {
+          "invariantId": "INV-9",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Timezone isolation holds: venue.timezone=\"America/Chicago\" is a valid IANA identifier"
+        },
+        {
+          "invariantId": "INV-10",
+          "passed": true,
+          "severity": "CONSTITUTIONAL_BREACH",
+          "message": "Output completeness holds: all required fields present in output, content_mix, reason_trace, and all 1 playlist items"
+        }
+      ],
+      "all_invariants_pass": true,
+      "assertion_results": [
+        {
+          "assertion": "assertNeverThrows",
+          "passed": true,
+          "actual": "PASS",
+          "expected": "PASS or FAIL (not EXECUTION_ERROR)",
+          "detail": "PRE.resolve() completed without throwing"
+        },
+        {
+          "assertion": "assertSystemFallbackAlwaysResolves",
+          "passed": true,
+          "actual": "PRE_Output",
+          "expected": "PRE_Output (non-null)",
+          "detail": "PRE.resolve() produced a non-null output under degraded conditions"
+        },
+        {
+          "assertion": "assertReplayHashStable",
+          "passed": true,
+          "actual": {
+            "run_1": "b485b67e",
+            "run_2": "b485b67e"
+          },
+          "expected": "run_1_output_hash === run_2_output_hash",
+          "detail": "Both runs produced hash: b485b67e"
+        },
+        {
+          "assertion": "assertReasonTraceExplainable",
+          "passed": true,
+          "actual": "all trace entries have reasons",
+          "expected": "all non-null trace entries have non-empty reason strings",
+          "detail": "All reason_trace entries are explainable"
+        },
+        {
+          "assertion": "assertEmergencyPrecedenceAbsolute",
+          "passed": true,
+          "actual": 0,
+          "expected": 0,
+          "detail": "Emergency correctly resolved at LEVEL_0"
+        },
+        {
+          "assertion": "assertNoInvariantSuppression",
+          "passed": true,
+          "actual": 10,
+          "expected": "> 0 invariant results",
+          "detail": "10 invariants checked, none suppressed"
+        },
+        {
+          "assertion": "assertNoReplayWrites",
+          "passed": true,
+          "actual": "c8e8b7d1",
+          "expected": "non-empty conditions_hash string (deterministic artifact)",
+          "detail": "Replay artifact is a deterministic observation (no writes to corpus)"
+        },
+        {
+          "assertion": "resolution_level === 0",
+          "passed": true,
+          "actual": 0,
+          "expected": 0,
+          "detail": "resolution_level is LEVEL_0"
+        },
+        {
+          "assertion": "all_poll_storm_outputs_hash_identical",
+          "passed": true,
+          "actual": [
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d",
+            "00dce81d"
+          ],
+          "expected": "all 10 playlist_checksums === 00dce81d",
+          "detail": "All 10 poll storm outputs have identical playlist_checksum: 00dce81d"
+        },
+        {
+          "assertion": "level_1_operational_trace === null",
+          "passed": true,
+          "expected": null,
+          "detail": "level_1_operational trace is null (skipped at LEVEL_0)"
+        },
+        {
+          "assertion": "level_5_structural_trace === null",
+          "passed": true,
+          "expected": null,
+          "detail": "level_5_structural trace is null (skipped at LEVEL_0)"
+        }
+      ],
+      "all_assertions_pass": true,
+      "execution_ms": 0,
+      "replay_artifact": {
+        "scenario_id": "CHAOS-007",
+        "input_hash": "44e5d009",
+        "output_hash": "b485b67e",
+        "conditions_hash": "c8e8b7d1",
+        "run_1_output_hash": "b485b67e",
+        "run_2_output_hash": "b485b67e",
+        "hashes_stable": true
+      },
+      "telemetry": {
+        "scenario_started_at": 1748390400000,
+        "scenario_completed_at": 1748390400000,
+        "events": [
+          {
+            "type": "chaos_scenario_started",
+            "scenario_id": "CHAOS-007",
+            "at": 1748390400000
+          },
+          {
+            "type": "degraded_resolution_detected",
+            "scenario_id": "CHAOS-007",
+            "resolution_level": 0,
+            "is_fallback": false,
+            "at": 1748390400000
+          },
+          {
+            "type": "stale_data_window_detected",
+            "scenario_id": "CHAOS-007",
+            "stale_fields": [
+              "last_delivery"
+            ],
+            "at": 1748390400000
+          },
+          {
+            "type": "chaos_scenario_completed",
+            "scenario_id": "CHAOS-007",
+            "status": "PASS",
+            "at": 1748390400000
+          }
+        ]
+      },
+      "status": "PASS"
+    }
+  ],
+  "constitutional_status": "PASS",
+  "summary": "CHAOS RUN PASSED: 7/7 scenarios. Constitutional guarantees verified.",
+  "total_execution_ms": 17
+}
