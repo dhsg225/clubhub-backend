@@ -92,7 +92,39 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   4. Loading + error states, no fake data
   5. `pnpm --filter @clubhub/cms-web typecheck` passes
 - **Role**: Human (Claude Design) → Feature Development (Frontend)
-- **Status**: TODO — awaiting Claude Design pass
+- **Status**: DONE 2026-06-12 (Governance/Claude Design) — mockup at __mockups__/CampaignList.tsx, promoted to production route, import depth fix (../lib/ not ../../lib/), 0 typecheck errors.
+
+### BL-014 — cms-web ContentDetail + ConstitutionalConsole `[S]`
+- **What**: Two missing routes. ContentDetail at `/content/:id` (linked from CampaignList rows). ConstitutionalConsole full implementation (was a stub).
+- **Acceptance criteria**:
+  1. `/content/:id` renders title, meta fields, all JSONB data key/value pairs; back link to /campaigns; loading/error states
+  2. ConstitutionalConsole reads `constitutionalStore` (state/reason/lastUpdated) and fetches `GET /health`; read-only; no controls
+  3. Route wired in App.tsx
+  4. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors)
+- **Files**: `apps/cms-web/src/routes/ContentDetail.tsx` (new), `apps/cms-web/src/routes/ConstitutionalConsole.tsx`, `apps/cms-web/src/App.tsx`
+- **Role**: Feature Development (Frontend) — Agent 3
+- **Status**: DONE 2026-06-12 (Agent 3) — ContentDetail.tsx created, ConstitutionalConsole.tsx implemented, /content/:id route wired in App.tsx. 0 typecheck errors.
+
+### BL-015 — Add backend:4000 auth coverage to integration harness `[S ~30min]`
+- **What**: The Docker integration harness only hits `cms-api:3001`. `requireScreenToken` on `backend:4000/manifest` (wired in BL-002) has zero CI coverage — a regression would be undetected. Add a harness step that exercises backend:4000 auth directly.
+- **Acceptance criteria**:
+  1. Harness step POSTs to `backend:4000/manifest` with no `Authorization` header → 401
+  2. Same POST with a valid enrolled screen token → 200
+  3. `docker compose -f docker-compose.integration.yml up --build --abort-on-container-exit` exits 0
+- **Files**: `integration-harness/integration-test.mjs` (or equivalent harness entry)
+- **Role**: QA
+- **Status**: TODO — filed from CH1 stop report recommendation
+
+### BL-016 — pre-runtime Wave 5: flush audit buffer to replay-service `[S]`
+- **What**: `services/pre-runtime/src/runtime.ts` buffers audit records at `AUDIT_BATCH_INTERVAL_MS` but the flush is a `// Wave 5 TODO` no-op. Records are silently dropped on restart.
+- **Acceptance criteria**:
+  1. Flush loop POSTs accumulated audit records to the configured audit endpoint (`audit-service` or `replay-service`)
+  2. Failed POST logs a warning but does not crash the runtime (fire-and-forget acceptable)
+  3. `pnpm --filter @clubhub/pre-runtime typecheck` passes
+  4. At least one test verifying the flush call is made
+- **Files**: `services/pre-runtime/src/runtime.ts`
+- **Role**: Feature Development
+- **Status**: TODO — filed from CH2 stop report (Wave 5 TODO comment)
 
 ---
 
