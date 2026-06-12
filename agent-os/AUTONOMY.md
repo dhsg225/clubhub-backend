@@ -102,6 +102,17 @@ If the issue no longer exists, mark the item DONE/NO-OP and move on. Do not impl
 
 ---
 
+## Zone Rules — Setup Guidance
+
+**Primary goal of zone rules is to reduce agent interruptions (MTBI).** Vague or generic rules cause agents to stop and ask when they shouldn't — or worse, to act when they shouldn't.
+
+When reviewing or updating these sections:
+- Every rule should be specific to this project's actual stack — not a generic default
+- Each Red Zone rule must name the specific failure mode it prevents
+- Each Green Zone permission must be confirmed as unable to touch production data or credentials
+
+---
+
 ## Green Zone — Act Without Asking
 
 ### Code changes

@@ -25,6 +25,7 @@ const ALL_ROLES: UserRole[] = [
 const router = createBrowserRouter([
   { path: '/login', lazy: () => import('./routes/LoginPage.js') },
   { path: '/preview', lazy: () => import('./routes/__mockups__/FleetDashboard.mockup.js') },
+  { path: '/preview-campaigns', lazy: () => import('./routes/__mockups__/CampaignList.js') },
   {
     element: (
       <RequireAuth requiredRole={ALL_ROLES}>

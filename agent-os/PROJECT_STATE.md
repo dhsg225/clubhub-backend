@@ -1,5 +1,5 @@
 # Project State
-**Last updated**: 2026-06-09 | **Updated by**: Governance (session 4 — BL-012 complete, all active items DONE)
+**Last updated**: 2026-06-12 | **Updated by**: Governance (session 5 — state refresh, BL-001 stale blocker cleared)
 **Read time**: ~4 minutes
 
 ---

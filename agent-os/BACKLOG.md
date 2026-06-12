@@ -81,6 +81,19 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Role**: Feature Development (Frontend) — CH3
 - **Status**: DONE 2026-06-09 (CH3/Governance) — screens table with last_seen_at, content_readiness_state, asset ratio bar, 72h autonomy alarm (red highlight + summary chip). last_corpus_sync_at absent from schema — last_seen_at used as contact proxy with footer disclaimer. 0 typecheck errors.
 
+### BL-013 — cms-web CampaignList: Claude Design pass then implement `[M]`
+- **What**: `/campaigns` route is a stub. Use Claude Design to produce a mockup, then implement.
+- **Claude Design input files**: `docs/shared/CANONICAL-CMS-CONTENT-OPERATIONS-SURFACE-v2.md`, `apps/cms-web/src/routes/CampaignList.tsx`, `apps/cms-web/src/components/layout/AppLayout.tsx`, `docs/shared/FRONTEND-COMPONENT-TAXONOMY-v1.md`, `apps/cms-web/src/routes/__mockups__/FleetDashboard.mockup.tsx`
+- **Data shape note**: `GET /content` returns `{id, template_type, data (JSONB), created_at, status}`. No `title` column — derive from `data?.title ?? data?.name ?? template_type`. Status values: `draft | active | scheduled | expired`. No new deps, inline styles only.
+- **Acceptance criteria**:
+  1. Claude Design mockup saved to `apps/cms-web/src/routes/__mockups__/CampaignList.mockup.tsx`
+  2. Implementation fetches campaigns/content from `GET /content`
+  3. Each row: title, type, status, created_at, link to detail
+  4. Loading + error states, no fake data
+  5. `pnpm --filter @clubhub/cms-web typecheck` passes
+- **Role**: Human (Claude Design) → Feature Development (Frontend)
+- **Status**: TODO — awaiting Claude Design pass
+
 ---
 
 ## Future (no scope yet — do not build)

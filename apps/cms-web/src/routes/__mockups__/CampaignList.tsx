@@ -15,7 +15,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { api } from '../lib/api-client.js';
+import { api } from '../../lib/api-client.js';
 
 /* ------------------------------------------------------------------ *
  * Types
