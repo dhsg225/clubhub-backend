@@ -117,17 +117,25 @@ export async function startRuntime(): Promise<void> {
     const records = await auditBuffer.readAll();
     if (records.length === 0) return;
 
-    try {
-      // TODO Wave 5: POST records to replay-service endpoint
-      emit({
-        ...base('INFO', 'pre_runtime.audit_flush'),
-        record_count: records.length,
-      } as Parameters<typeof emit>[0]);
-    } catch (err: unknown) {
-      emit({
-        ...base('ERROR', 'pre_runtime.audit_flush_error'),
-        error: String(err),
-      } as Parameters<typeof emit>[0]);
+    if (config.AUDIT_ENDPOINT) {
+      try {
+        await fetch(config.AUDIT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(records),
+        });
+        emit({
+          ...base('INFO', 'pre_runtime.audit_flush'),
+          record_count: records.length,
+        } as Parameters<typeof emit>[0]);
+      } catch (err: unknown) {
+        // Fire-and-forget — log warning, never crash
+        emit({
+          ...base('WARN', 'pre_runtime.audit_flush_error'),
+          error: String(err),
+          record_count: records.length,
+        } as Parameters<typeof emit>[0]);
+      }
     }
   }, config.AUDIT_BATCH_INTERVAL_MS);
 

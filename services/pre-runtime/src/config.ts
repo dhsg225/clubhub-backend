@@ -15,6 +15,8 @@ export interface PreRuntimeConfig {
   readonly CORPUS_SYNC_INTERVAL_MS: number;
   readonly AUDIT_BATCH_INTERVAL_MS: number;
   readonly WS_PORT: number;
+  /** Optional — if set, audit records are POSTed here at each flush interval. */
+  readonly AUDIT_ENDPOINT: string;
 }
 
 export function loadConfig(): PreRuntimeConfig {
@@ -25,5 +27,6 @@ export function loadConfig(): PreRuntimeConfig {
     CORPUS_SYNC_INTERVAL_MS: parseInt(optionalEnv('CORPUS_SYNC_INTERVAL_MS', '30000'), 10),
     AUDIT_BATCH_INTERVAL_MS: parseInt(optionalEnv('AUDIT_BATCH_INTERVAL_MS', '10000'), 10),
     WS_PORT: parseInt(optionalEnv('WS_PORT', '7777'), 10),
+    AUDIT_ENDPOINT: optionalEnv('AUDIT_ENDPOINT', ''),
   };
 }
