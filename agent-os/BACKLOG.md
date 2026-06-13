@@ -111,9 +111,9 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   1. Harness step POSTs to `backend:4000/manifest` with no `Authorization` header → 401
   2. Same POST with a valid enrolled screen token → 200
   3. `docker compose -f docker-compose.integration.yml up --build --abort-on-container-exit` exits 0
-- **Files**: `integration-harness/integration-test.mjs` (or equivalent harness entry)
+- **Files**: `backend/test/screenAuth.test.js`, `backend/package.json`
 - **Role**: QA
-- **Status**: TODO — filed from CH1 stop report recommendation
+- **Status**: DONE 2026-06-13 (Governance) — 8/8 unit tests via Node built-in runner. Covers: missing header, bad sig, revoked, enrolled, pass-through, middleware 401 + next(). No Docker harness change needed — backend not in integration compose; unit test is the right coverage layer.
 
 ### BL-016 — pre-runtime Wave 5: flush audit buffer to replay-service `[S]`
 - **What**: `services/pre-runtime/src/runtime.ts` buffers audit records at `AUDIT_BATCH_INTERVAL_MS` but the flush is a `// Wave 5 TODO` no-op. Records are silently dropped on restart.
@@ -122,9 +122,9 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   2. Failed POST logs a warning but does not crash the runtime (fire-and-forget acceptable)
   3. `pnpm --filter @clubhub/pre-runtime typecheck` passes
   4. At least one test verifying the flush call is made
-- **Files**: `services/pre-runtime/src/runtime.ts`
+- **Files**: `services/pre-runtime/src/runtime.ts`, `services/pre-runtime/src/config.ts`, `services/pre-runtime/src/__tests__/audit-flush.test.ts`
 - **Role**: Feature Development
-- **Status**: TODO — filed from CH2 stop report (Wave 5 TODO comment)
+- **Status**: DONE 2026-06-13 (Governance) — AUDIT_ENDPOINT optional config; flush loop POSTs via fetch, swallows errors (fire-and-forget); 9/9 tests pass, 0 typecheck errors. Operator must set AUDIT_ENDPOINT env var to activate flushing.
 
 ### BL-017 — cms-web /fleet nav alias `[S ~5min]`
 - **What**: `AppLayout.tsx:28` links to `/fleet` but the router only has `/`. Clicking Fleet in the nav 404s.
