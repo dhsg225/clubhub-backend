@@ -126,6 +126,38 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Role**: Feature Development
 - **Status**: TODO — filed from CH2 stop report (Wave 5 TODO comment)
 
+### BL-017 — cms-web /fleet nav alias `[S ~5min]`
+- **What**: `AppLayout.tsx:28` links to `/fleet` but the router only has `/`. Clicking Fleet in the nav 404s.
+- **Acceptance criteria**:
+  1. `/fleet` route added to App.tsx as a lazy alias to `FleetDashboard.js`
+  2. `pnpm --filter @clubhub/cms-web typecheck` passes
+- **Files**: `apps/cms-web/src/App.tsx`
+- **Role**: Feature Development (Frontend) — Agent 3
+- **Status**: DONE 2026-06-13 (Agent 3) — `/fleet` alias added to App.tsx. 0 typecheck errors.
+
+### BL-018 — cms-web AuditLog surface (/audit) `[S]`
+- **What**: `/audit` nav link is unwired. Add AuditLog.tsx reading from audit-service at localhost:3002.
+- **Acceptance criteria**:
+  1. Vite proxy `/api/audit` → `http://localhost:3002` added
+  2. AuditLog fetches `GET /api/audit/audit/events?limit=100`, 30s refetch
+  3. Table: recorded_at, event_type badge, venue_id, screen_id, payload summary (80 chars)
+  4. Loading/error/empty states. No fake data.
+  5. Route wired in App.tsx. `pnpm --filter @clubhub/cms-web typecheck` passes
+- **Files**: `apps/cms-web/src/routes/AuditLog.tsx` (new), `apps/cms-web/vite.config.ts`, `apps/cms-web/src/App.tsx`
+- **Role**: Feature Development (Frontend) — Agent 3
+- **Status**: DONE 2026-06-13 (Agent 3) — AuditLog.tsx created, /api/audit proxy added to vite.config.ts, /audit route wired. 0 typecheck errors.
+
+### BL-019 — cms-web ContentDetail: schedules panel `[S]`
+- **What**: ContentDetail.tsx needs a Schedules section showing `GET /schedules?content_id=:id`.
+- **Acceptance criteria**:
+  1. `useQuery` fetches `GET /schedules?content_id=:id` via existing api client
+  2. Table: target (venue/screen/global), priority badge, starts_at → ends_at (or "always")
+  3. Empty state: "No schedules — this content is not playing anywhere."
+  4. Read-only. `pnpm --filter @clubhub/cms-web typecheck` passes
+- **Files**: `apps/cms-web/src/routes/ContentDetail.tsx`
+- **Role**: Feature Development (Frontend) — Agent 3
+- **Status**: DONE 2026-06-13 (Agent 3) — Schedule interface, SchedulesPanel component, PriorityBadge, scheduleTarget helper added. useQuery fetches /schedules?content_id=:id. 0 typecheck errors.
+
 ---
 
 ## Future (no scope yet — do not build)

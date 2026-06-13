@@ -34,8 +34,11 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: '/', lazy: () => import('./routes/FleetDashboard.js') },
+      { path: '/fleet', lazy: () => import('./routes/FleetDashboard.js') },
       { path: '/venues/:venueId', lazy: () => import('./routes/VenueDashboard.js') },
       { path: '/campaigns', lazy: () => import('./routes/CampaignList.js') },
+      { path: '/content/:id', lazy: () => import('./routes/ContentDetail.js') },
+      { path: '/audit', lazy: () => import('./routes/AuditLog.js') },
       { path: '/constitutional', lazy: () => import('./routes/ConstitutionalConsole.js') },
     ],
   },
