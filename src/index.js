@@ -83,9 +83,19 @@ app.use('/ota',       rateLimit.heavy, otaRouter);
 app.use('/playlist',  rateLimit.write, playlistRouter);
 app.use('/asset',     rateLimit.write, assetsRouter);
 
-// ── 404 catch-all ─────────────────────────────────────────────────────────────
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Not found' });
+// ── Frontend (CMS web app) ─────────────────────────────────────────────────────
+// Serve built React app for all non-API routes (SPA client-side routing).
+app.use(express.static(path.join(__dirname, '../public')));
+app.get('*', (req, res) => {
+  // Only serve index.html for non-API paths
+  if (req.path.startsWith('/health') || req.path.startsWith('/venues') ||
+      req.path.startsWith('/screens') || req.path.startsWith('/content') ||
+      req.path.startsWith('/schedules') || req.path.startsWith('/manifest') ||
+      req.path.startsWith('/ota') || req.path.startsWith('/playlist') ||
+      req.path.startsWith('/asset') || req.path.startsWith('/uploads')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 // ── Unhandled error handler ───────────────────────────────────────────────────
