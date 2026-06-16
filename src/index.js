@@ -84,15 +84,15 @@ app.use('/playlist',  rateLimit.write, playlistRouter);
 app.use('/asset',     rateLimit.write, assetsRouter);
 
 // ── Frontend (CMS web app) ─────────────────────────────────────────────────────
-// Serve built React app for all non-API routes (SPA client-side routing).
+// Serve static assets first (JS/CSS bundles, index.html at root).
 app.use(express.static(path.join(__dirname, '../public')));
+
+// SPA catch-all: serve index.html for browser navigation to any unknown path.
+// API calls always carry X-Correlation-Id (set by api-client.ts); browser
+// navigation never does. This lets /venues, /screens etc. work as both
+// API endpoints (when called by the app) and frontend routes (when typed directly).
 app.get('*', (req, res) => {
-  // Only serve index.html for non-API paths
-  if (req.path.startsWith('/health') || req.path.startsWith('/venues') ||
-      req.path.startsWith('/screens') || req.path.startsWith('/content') ||
-      req.path.startsWith('/schedules') || req.path.startsWith('/manifest') ||
-      req.path.startsWith('/ota') || req.path.startsWith('/playlist') ||
-      req.path.startsWith('/asset') || req.path.startsWith('/uploads')) {
+  if (req.headers['x-correlation-id']) {
     return res.status(404).json({ error: 'Not found' });
   }
   res.sendFile(path.join(__dirname, '../public/index.html'));
