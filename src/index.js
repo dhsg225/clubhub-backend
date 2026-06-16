@@ -70,11 +70,21 @@ app.use('/health', healthRouter);
 // Manifest reads: generous limit — 10 screens × 4 req/min = 40 req/min expected
 app.use('/manifest',  rateLimit(120, 60_000), screenAuth.requireScreenToken, manifestRouter);
 
+// For browser navigation to API paths, serve the SPA instead of JSON.
+// API calls always carry X-Correlation-Id (set by api-client.ts);
+// direct browser navigation never does.
+const serveSpaForBrowser = (req, res, next) => {
+  if (!req.headers['x-correlation-id']) {
+    return res.sendFile(path.join(__dirname, '../public/index.html'));
+  }
+  next();
+};
+
 // Write endpoints: moderate limit
-app.use('/content',   rateLimit.write, contentRouter);
-app.use('/schedules', rateLimit.write, schedulesRouter);
-app.use('/venues',    rateLimit.write, venuesRouter);
-app.use('/screens',   rateLimit.write, screensRouter);
+app.use('/content',   serveSpaForBrowser, rateLimit.write, contentRouter);
+app.use('/schedules', serveSpaForBrowser, rateLimit.write, schedulesRouter);
+app.use('/venues',    serveSpaForBrowser, rateLimit.write, venuesRouter);
+app.use('/screens',   serveSpaForBrowser, rateLimit.write, screensRouter);
 
 // OTA delivery — operator API + Pi polling
 app.use('/ota',       rateLimit.heavy, otaRouter);
