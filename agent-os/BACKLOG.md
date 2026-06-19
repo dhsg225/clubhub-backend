@@ -168,7 +168,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   5. No new dependencies. `pnpm --filter @clubhub/player-ui build` stays 0 errors.
 - **Files**: `apps/player-ui/src/index.ts`, `apps/player-ui/src/playlist-renderer.ts`
 - **Role**: Feature Development (Frontend) — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-19 (Agent 3) — overlay bug fixed (textContent on child divs, not parent), EMERGENCY_CLEAR hides without wiping children, showWaiting() on initial load + empty PLAYLIST_UPDATE, dev comment added. build PASS, dist/index.js present.
 
 ---
 
