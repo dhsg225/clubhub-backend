@@ -223,7 +223,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-F03 | sponsor-portal implementation — no scope defined |
 | BL-F04 | pg pool scaling beyond 10 — trigger: ≥ 100 enrolled screens (see BL-005) |
 | BL-F05 | Automated corpus cache upload on 50MB cap — trigger: venues reporting replay errors |
-| BL-F06 | Playlist composer UI — group cards into a playlist with ordering rules and per-card duration. Depends on BL-021 DONE. |
+| ~~BL-F06~~ | Promoted to BL-F06 → DONE (see below). |
 | BL-F07 | Schedule creator UI — map a playlist to venue/screen group with daypart window. Depends on BL-F06. |
 | BL-F08 | Image upload + server-side WebP conversion at 1920×1080 — required before any card type uses images in production. |
 | BL-F09 | promo_slide production renderer — promoted to BL-023 (active). |
@@ -240,3 +240,4 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-006 | 2026-06-08 | Replay cache 50MB ceiling documented, manual truncate procedure — DOCS-1 |
 | BL-007 | 2026-06-08 | OTA canary manual verification procedure documented — DOCS-1 |
 | BL-INT-01 | 2026-06-09 | Integration harness re-validated after BL-002 auth enforcement: 34/34 GREEN. Player-runtime uses cms-api:3001 (not backend:4000); SCREEN_AUTH_ENFORCE has no effect on harness. — CH1 |
+| BL-F06 | 2026-06-19 | Playlist Composer complete. migrate_008.sql (named_playlists table), named-playlists.js Express router (5 endpoints), PlaylistList.tsx (/playlists), PlaylistComposer.tsx (/playlists/new + /playlists/:id), AppLayout Playlists nav link. Deployed to production. 0 typecheck errors. — Agent 3 |

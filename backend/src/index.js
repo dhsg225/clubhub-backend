@@ -21,7 +21,8 @@ const assetsRouter    = require('./routes/assets');
 const venuesRouter    = require('./routes/venues');
 const screensRouter   = require('./routes/screens');
 const schedulesRouter = require('./routes/schedules');
-const otaRouter       = require('./routes/ota');
+const otaRouter            = require('./routes/ota');
+const namedPlaylistsRouter = require('./routes/named-playlists');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -88,6 +89,9 @@ app.use('/screens',   serveSpaForBrowser, rateLimit.write, screensRouter);
 
 // OTA delivery — operator API + Pi polling
 app.use('/ota',       rateLimit.heavy, otaRouter);
+
+// Named playlists (operator-authored playlist groups)
+app.use('/named_playlists', serveSpaForBrowser, rateLimit.write, namedPlaylistsRouter);
 
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);
