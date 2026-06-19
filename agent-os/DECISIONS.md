@@ -167,3 +167,39 @@ All entries below are labelled `Source: codebase inference` unless a human has a
 
 **Source**: codebase inference (CI stage configuration, `test-runner/contracts/validate-contracts.js` comment header)
 **Status**: Active
+
+---
+
+## D-013 — Content hierarchy: Card → Playlist → Schedule → Screen
+
+**Decision**: ClubHub TV adopts the 4-layer content model confirmed by industry research (ScreenCloud, Yodeck, NoviSign, Screenly, Signagelive all converged on this):
+
+- **Card** (`content` table) — a single template instance. e.g. one `promo_slide`, one `event_banner`. Has an expiry date (validity window).
+- **Playlist** (`/playlist` route, exists in backend) — an ordered loop of cards. Has ordering rule: sequential or shuffle. Has duration per card (seconds).
+- **Schedule** (`schedules` table) — maps a playlist to a venue/screen group with a daypart window (e.g. Thu–Sun 16:00–21:00). Priority determines override behaviour.
+- **Screen** — the Pi. Pulls its active playlist from the corpus resolved by PRE engine.
+
+**What was abandoned by the industry and must NOT be built:**
+- Free-form canvas layout editor (operators produce illegible designs)
+- Timeline-style sequence editors (too complex, ignored)
+- Deeply nested playlists (crashes low-power players)
+- Live URL loading without local cache (blank screens on WiFi drop)
+
+**Implication**: The CMS operator UI must expose all 4 layers. Current gap: Playlist composer and Schedule creator have no operator UI. Card authoring form does not exist yet. Build order: Card authoring → Playlist composer → Schedule creator.
+
+**Source**: Gemini Deep Research 2026-06-19 — industry comparative analysis of 7 platforms
+**Status**: Active
+
+---
+
+## D-014 — Card authoring constraints: form-based, brand-locked, expiry required
+
+**Decision**: Card authoring UI must follow the form-based constrained model (not canvas). Specific rules:
+- Each template type has a fixed field set with character limits enforced in the UI
+- Background colour and text colour are the only visual controls exposed to operators (brand palette optional future constraint)
+- Every card requires a validity/expiry date — no card can be saved without one (or explicit "no expiry" acknowledgement)
+- Image uploads must be auto-converted server-side to WebP at 1920×1080 — raw HEIC/JPEG from mobile phones is not acceptable on the Pi
+- Live 16:9 preview updates in real time as the operator fills fields (right panel alongside form)
+
+**Source**: Gemini Deep Research 2026-06-19 — operator psychology + failed paradigms analysis
+**Status**: Active

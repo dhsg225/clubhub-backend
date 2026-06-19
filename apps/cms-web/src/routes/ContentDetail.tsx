@@ -265,27 +265,47 @@ export function Component(): JSX.Element {
     (typeof item.data?.name === 'string' && item.data.name.trim())
   );
 
+  function openPreview(): void {
+    window.open(
+      `/preview/content/${item!.id}`,
+      'clubhub-preview',
+      'width=1280,height=720,resizable=yes,scrollbars=no',
+    );
+  }
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827', maxWidth: '800px' }}>
       <Link to="/campaigns" style={backLinkStyle}>← Campaigns</Link>
 
       {/* Header */}
-      <div style={{ margin: '0.75rem 0 1.5rem' }}>
-        <h1 style={{
-          margin: '0 0 0.25rem',
-          fontSize: '1.5rem', fontWeight: 600,
-          fontStyle: titleIsFallback ? 'italic' : 'normal',
+      <div style={{ margin: '0.75rem 0 1.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
+        <div>
+          <h1 style={{
+            margin: '0 0 0.25rem',
+            fontSize: '1.5rem', fontWeight: 600,
+            fontStyle: titleIsFallback ? 'italic' : 'normal',
+          }}>
+            {title}
+          </h1>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
+            {item.template_type}
+            {titleIsFallback && (
+              <span style={{ marginLeft: '0.5rem', color: '#9ca3af' }}>
+                · no title in data — showing template type
+              </span>
+            )}
+          </p>
+        </div>
+        <button onClick={openPreview} style={{
+          flexShrink: 0,
+          padding: '0.5rem 1rem',
+          backgroundColor: '#1d4ed8', color: '#fff',
+          border: 'none', borderRadius: '6px',
+          fontSize: '0.875rem', fontWeight: 600,
+          cursor: 'pointer', whiteSpace: 'nowrap',
         }}>
-          {title}
-        </h1>
-        <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-          {item.template_type}
-          {titleIsFallback && (
-            <span style={{ marginLeft: '0.5rem', color: '#9ca3af' }}>
-              · no title in data — showing template type
-            </span>
-          )}
-        </p>
+          Preview on screen ↗
+        </button>
       </div>
 
       {/* Meta row */}

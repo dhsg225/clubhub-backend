@@ -170,6 +170,36 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Role**: Feature Development (Frontend) — Agent 3
 - **Status**: DONE 2026-06-19 (Agent 3) — overlay bug fixed (textContent on child divs, not parent), EMERGENCY_CLEAR hides without wiping children, showWaiting() on initial load + empty PLAYLIST_UPDATE, dev comment added. build PASS, dist/index.js present.
 
+### BL-021 — cms-web Card Authoring Form (/content/new) `[M]`
+- **What**: Operator UI for creating a new content card. Split-panel: form left, live 16:9 preview right.
+- **Acceptance criteria**:
+  1. Template type selector: promo_slide, event_banner, sponsor_banner, menu_board, daily_specials
+  2. Field set changes per template with character limits (count shown)
+  3. Colour pickers for promo_slide background/text colours
+  4. Expiry date field (required) or "No expiry" checkbox
+  5. Live 16:9 preview updates in real time
+  6. Save → POST /content → redirect to /campaigns
+  7. "New campaign" button on CampaignList
+  8. Route wired in App.tsx (/content/new before /content/:id)
+  9. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors)
+- **Files**: `apps/cms-web/src/routes/ContentNew.tsx` (new), `apps/cms-web/src/routes/CampaignList.tsx`, `apps/cms-web/src/App.tsx`
+- **Role**: Feature Development (Frontend) — Agent 3
+- **Status**: DONE 2026-06-19 (Agent 3) — ContentNew.tsx ~700 lines. All 5 templates implemented. Character count display, colour pickers, menu_board up to 2 sections/4 items each, daily_specials up to 5 items. Live preview uses STUB_COLORS palette matching ContentPreview. Client-side validation (required fields, char limits, expiry). expires_at stored in data JSONB (no DB column). 0 typecheck errors.
+
+---
+
+### BL-022 — DB migration: promote expires_at to first-class column on content table `[S]`
+- **What**: Agent 3 stored `expires_at` in the JSONB `data` blob as a shortcut. This must become a dedicated `expires_at TIMESTAMPTZ` column on the `content` table so the schedule engine and PRE resolver can filter on it efficiently with an index.
+- **Acceptance criteria**:
+  1. New migration file `backend/db/migrate_005.sql` adds `expires_at TIMESTAMPTZ NULL` to `content` table with an index
+  2. `GET /content` filters out expired cards by default (where `expires_at IS NULL OR expires_at > NOW()`)
+  3. `ContentNew.tsx` updated to POST `expires_at` as a top-level field, not inside `data`
+  4. Existing content rows with `expires_at` in their `data` JSONB are backfilled by the migration
+  5. Migration runs clean on production DB
+- **Files**: `backend/db/migrate_005.sql` (new), `backend/src/routes/content.js`, `apps/cms-web/src/routes/ContentNew.tsx`
+- **Role**: Feature Development — Agent 3
+- **Status**: TODO
+
 ---
 
 ## Future (no scope yet — do not build)
@@ -181,6 +211,10 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-F03 | sponsor-portal implementation — no scope defined |
 | BL-F04 | pg pool scaling beyond 10 — trigger: ≥ 100 enrolled screens (see BL-005) |
 | BL-F05 | Automated corpus cache upload on 50MB cap — trigger: venues reporting replay errors |
+| BL-F06 | Playlist composer UI — group cards into a playlist with ordering rules and per-card duration. Depends on BL-021 DONE. |
+| BL-F07 | Schedule creator UI — map a playlist to venue/screen group with daypart window. Depends on BL-F06. |
+| BL-F08 | Image upload + server-side WebP conversion at 1920×1080 — required before any card type uses images in production. |
+| BL-F09 | promo_slide production renderer — replace stub with real visual (uses background_color, text_color, large title). |
 
 ---
 

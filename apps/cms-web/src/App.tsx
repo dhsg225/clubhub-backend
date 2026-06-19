@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createBrowserRouter, Navigate } from 'react-router-dom';
+import { RouterProvider, createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { ConstitutionalStateOverlay } from './components/constitutional/ConstitutionalStateOverlay.js';
 import { WebSocketConstitutionalSync } from './components/constitutional/WebSocketConstitutionalSync.js';
 import { AppLayout } from './components/layout/AppLayout.js';
@@ -29,6 +29,16 @@ const router = createBrowserRouter([
   {
     element: (
       <RequireAuth requiredRole={ALL_ROLES}>
+        <Outlet />
+      </RequireAuth>
+    ),
+    children: [
+      { path: '/preview/content/:id', lazy: () => import('./routes/ContentPreview.js') },
+    ],
+  },
+  {
+    element: (
+      <RequireAuth requiredRole={ALL_ROLES}>
         <AppLayout />
       </RequireAuth>
     ),
@@ -38,6 +48,7 @@ const router = createBrowserRouter([
       { path: '/venues', element: <Navigate to="/" replace /> },
       { path: '/venues/:venueId', lazy: () => import('./routes/VenueDashboard.js') },
       { path: '/campaigns', lazy: () => import('./routes/CampaignList.js') },
+      { path: '/content/new', lazy: () => import('./routes/ContentNew.js') },
       { path: '/content/:id', lazy: () => import('./routes/ContentDetail.js') },
       { path: '/templates', lazy: () => import('./routes/TemplateGallery.js') },
       { path: '/audit', lazy: () => import('./routes/AuditLog.js') },

@@ -6,7 +6,10 @@ import { useEffect } from 'react';
 import { useConstitutionalStore } from '../../stores/constitutionalStore.js';
 import type { ConstitutionalState } from '@clubhub/constitutional-types';
 
-const WS_URL = (import.meta.env['VITE_WS_URL'] as string | undefined) ?? 'ws://localhost:3000/ws/constitutional';
+const WS_URL = (import.meta.env['VITE_WS_URL'] as string | undefined) ?? (() => {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}/ws/constitutional`;
+})();
 
 export function WebSocketConstitutionalSync(): null {
   const setConstitutionalState = useConstitutionalStore((s) => s.setConstitutionalState);

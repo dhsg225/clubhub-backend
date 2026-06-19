@@ -127,15 +127,30 @@ export function Component(): JSX.Element {
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827', maxWidth: '960px' }}>
       {/* Header */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600 }}>Campaigns</h1>
-        <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
-          {isLoading
-            ? 'Loading campaigns…'
-            : isError
-            ? 'Campaign list unavailable'
-            : `${counts.all} ${counts.all === 1 ? 'campaign' : 'campaigns'}`}
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600 }}>Campaigns</h1>
+          <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
+            {isLoading
+              ? 'Loading campaigns…'
+              : isError
+              ? 'Campaign list unavailable'
+              : `${counts.all} ${counts.all === 1 ? 'campaign' : 'campaigns'}`}
+          </p>
+        </div>
+        <Link
+          to="/content/new"
+          style={{
+            flexShrink: 0, display: 'inline-block',
+            padding: '0.5rem 1rem',
+            backgroundColor: '#1d4ed8', color: '#fff',
+            borderRadius: '6px', textDecoration: 'none',
+            fontSize: '0.875rem', fontWeight: 600,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          + New campaign
+        </Link>
       </div>
 
       {/* Status filter chips */}
