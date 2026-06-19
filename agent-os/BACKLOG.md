@@ -191,14 +191,26 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 ### BL-022 — DB migration: promote expires_at to first-class column on content table `[S]`
 - **What**: Agent 3 stored `expires_at` in the JSONB `data` blob as a shortcut. This must become a dedicated `expires_at TIMESTAMPTZ` column on the `content` table so the schedule engine and PRE resolver can filter on it efficiently with an index.
 - **Acceptance criteria**:
-  1. New migration file `backend/db/migrate_005.sql` adds `expires_at TIMESTAMPTZ NULL` to `content` table with an index
+  1. New migration file `backend/db/migrate_007.sql` adds `expires_at TIMESTAMPTZ NULL` to `content` table with an index
   2. `GET /content` filters out expired cards by default (where `expires_at IS NULL OR expires_at > NOW()`)
   3. `ContentNew.tsx` updated to POST `expires_at` as a top-level field, not inside `data`
   4. Existing content rows with `expires_at` in their `data` JSONB are backfilled by the migration
   5. Migration runs clean on production DB
-- **Files**: `backend/db/migrate_005.sql` (new), `backend/src/routes/content.js`, `apps/cms-web/src/routes/ContentNew.tsx`
+- **Files**: `backend/db/migrate_007.sql` (new), `backend/src/routes/content.js`, `apps/cms-web/src/routes/ContentNew.tsx`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-19 (Agent 3) — migrate_007.sql created + applied to production (ALTER TABLE + index + JSONB backfill). content.js POST strips expires_at from data JSONB, inserts as $3 col; GET /content adds WHERE (expires_at IS NULL OR expires_at > NOW()). ContentNew.tsx posts expires_at as top-level field, strips from data object. 0 typecheck errors. Frontend + backend deployed to production.
+
+### BL-023 — promo_slide real renderer (ContentPreview + player-ui) `[S]`
+- **What**: Replace the generic violet stub for `promo_slide` with a real visual renderer that uses the `background_color`, `text_color`, `title`, and `subtitle` fields from the card's data. This is the first template type to graduate from stub to production visual.
+- **Acceptance criteria**:
+  1. `ContentPreview.tsx`: when `item.template_type === 'promo_slide'`, render a real layout — full 16:9 background using `data.background_color ?? '#1a1a2e'`, large centred title using `data.text_color ?? '#ffffff'`, subtitle below in same colour at ~60% opacity, NO "STUB" watermark. All other template types still use the generic TemplateStub.
+  2. `apps/player-ui/src/template-stubs.ts`: `renderTemplateStub()` for `promo_slide` uses `data.background_color` and `data.text_color` and shows title/subtitle. Same visual as ContentPreview.
+  3. Live preview in `ContentNew.tsx` (right panel) already uses `data.background_color` and `data.text_color` directly — verify it is consistent with ContentPreview and no changes are needed there.
+  4. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors).
+  5. `pnpm --filter @clubhub/player-ui build` passes.
+- **Files**: `apps/cms-web/src/routes/ContentPreview.tsx`, `apps/player-ui/src/template-stubs.ts`
+- **Role**: Feature Development — Agent 3
+- **Status**: DONE 2026-06-19 (Agent 3) — PromoSlideRenderer component added to ContentPreview.tsx (full-bg real layout, large title, 75%-opacity subtitle, no STUB watermark, generic TemplateStub unchanged for all other types). renderTemplateStub() in template-stubs.ts early-exits for promo_slide with DOM-built title+subtitle+bg. ContentNew.tsx LivePreview confirmed already consistent. 0 typecheck errors, player-ui build PASS. Deployed to production.
 
 ---
 
@@ -214,7 +226,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-F06 | Playlist composer UI — group cards into a playlist with ordering rules and per-card duration. Depends on BL-021 DONE. |
 | BL-F07 | Schedule creator UI — map a playlist to venue/screen group with daypart window. Depends on BL-F06. |
 | BL-F08 | Image upload + server-side WebP conversion at 1920×1080 — required before any card type uses images in production. |
-| BL-F09 | promo_slide production renderer — replace stub with real visual (uses background_color, text_color, large title). |
+| BL-F09 | promo_slide production renderer — promoted to BL-023 (active). |
 
 ---
 

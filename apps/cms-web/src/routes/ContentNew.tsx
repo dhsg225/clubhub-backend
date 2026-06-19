@@ -6,8 +6,8 @@
  *   LEFT  — form: template selector, field set, expiry, save
  *   RIGHT — live 16:9 preview that mirrors form state in real time
  *
- * POSTs to POST /content with { template_type, data }.
- * expires_at is stored inside the data JSONB blob (no dedicated DB column yet).
+ * POSTs to POST /content with { template_type, data, expires_at }.
+ * expires_at is a top-level field (dedicated TIMESTAMPTZ column, not inside data JSONB).
  *
  * D-013: Card → Playlist → Schedule → Screen content hierarchy.
  * D-014: Form-based, brand-locked, expiry required.
@@ -630,7 +630,7 @@ export function Component(): JSX.Element {
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const { mutate: save, isPending, error: saveError } = useMutation({
-    mutationFn: (payload: { template_type: string; data: Record<string, unknown> }) =>
+    mutationFn: (payload: { template_type: string; data: Record<string, unknown>; expires_at: string | null }) =>
       api.post<{ id: string }>('/content', payload),
     onSuccess: () => {
       navigate('/campaigns');
@@ -649,11 +649,15 @@ export function Component(): JSX.Element {
     if (err) { setValidationError(err); return; }
     setValidationError(null);
 
-    const data = {
-      ...(formData as unknown as Record<string, unknown>),
-      expires_at: noExpiry ? null : expiresAt,
-    };
-    save({ template_type: templateType, data });
+    // Build data object — strip expires_at from the JSONB blob (it's now a DB column)
+    const rawData = formData as unknown as Record<string, unknown>;
+    const { expires_at: _dropped, ...cleanData } = rawData;
+    void _dropped; // prevent unused-var lint warning
+    save({
+      template_type: templateType,
+      data: cleanData,
+      expires_at: noExpiry ? null : expiresAt || null,
+    });
   }
 
   return (

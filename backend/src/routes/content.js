@@ -5,16 +5,20 @@ const router = express.Router();
 
 // POST /content
 router.post('/', async (req, res) => {
-  const { template_type, data } = req.body;
+  const { template_type, data, expires_at } = req.body;
 
   if (!template_type || !data) {
     return res.status(400).json({ error: 'template_type and data are required' });
   }
 
+  // Strip expires_at from data JSONB to avoid duplication — it now lives in its own column
+  const cleanData = { ...data };
+  delete cleanData.expires_at;
+
   try {
     const result = await pool.query(
-      'INSERT INTO content (template_type, data) VALUES ($1, $2) RETURNING *',
-      [template_type, JSON.stringify(data)]
+      'INSERT INTO content (template_type, data, expires_at) VALUES ($1, $2, $3) RETURNING *',
+      [template_type, JSON.stringify(cleanData), expires_at || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -46,6 +50,7 @@ router.get('/', async (req, res) => {
         END AS status
       FROM content c
       LEFT JOIN schedules s ON s.content_id = c.id
+      WHERE (c.expires_at IS NULL OR c.expires_at > NOW())
       GROUP BY c.id
       ORDER BY c.created_at DESC
     `);

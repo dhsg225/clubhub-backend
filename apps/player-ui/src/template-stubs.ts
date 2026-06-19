@@ -23,6 +23,64 @@ export function renderTemplateStub(
 ): void {
   container.innerHTML = '';
 
+  // promo_slide: real renderer — uses background_color, text_color, title, subtitle
+  if (templateType === 'promo_slide') {
+    const bg = (data.background_color as string) ?? '#1a1a2e';
+    const textColor = (data.text_color as string) ?? '#ffffff';
+    const title = (data.title as string) ?? '';
+    const subtitle = (data.subtitle as string) ?? '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = [
+      'width:100%', 'height:100%', `background:${bg}`,
+      'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
+      'box-sizing:border-box', 'position:relative', 'overflow:hidden',
+    ].join(';');
+
+    if (title) {
+      const titleEl = document.createElement('div');
+      titleEl.style.cssText = [
+        `color:${textColor}`,
+        'font-family:system-ui,sans-serif',
+        'font-size:clamp(2.5rem, 8vw, 6rem)',
+        'font-weight:800',
+        'letter-spacing:-0.02em',
+        'text-align:center',
+        'line-height:1.1',
+        'max-width:80%',
+        subtitle ? 'margin-bottom:4%' : '',
+      ].filter(Boolean).join(';');
+      titleEl.textContent = title;
+      wrapper.appendChild(titleEl);
+    }
+
+    if (subtitle) {
+      const subtitleEl = document.createElement('div');
+      subtitleEl.style.cssText = [
+        `color:${textColor}`,
+        'font-family:system-ui,sans-serif',
+        'font-size:clamp(1rem, 3vw, 2rem)',
+        'font-weight:400',
+        'text-align:center',
+        'line-height:1.4',
+        'max-width:65%',
+        'opacity:0.75',
+      ].join(';');
+      subtitleEl.textContent = subtitle;
+      wrapper.appendChild(subtitleEl);
+    }
+
+    if (!title && !subtitle) {
+      const emptyEl = document.createElement('div');
+      emptyEl.style.cssText = `color:${textColor};opacity:0.4;font-family:system-ui,sans-serif;text-align:center;font-size:1rem;`;
+      emptyEl.textContent = 'No content — fill in title and subtitle in the form';
+      wrapper.appendChild(emptyEl);
+    }
+
+    container.appendChild(wrapper);
+    return;
+  }
+
   const bg = STUB_COLORS[templateType] ?? '#4B5563';
 
   const wrapper = document.createElement('div');

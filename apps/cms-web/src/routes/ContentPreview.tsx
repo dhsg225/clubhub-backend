@@ -59,6 +59,10 @@ function ContentPreview(): JSX.Element {
 }
 
 function TemplateStub({ item }: { item: ContentItem }): JSX.Element {
+  if (item.template_type === 'promo_slide') {
+    return <PromoSlideRenderer item={item} />;
+  }
+
   const bg = STUB_COLORS[item.template_type] ?? '#4B5563';
   const data = item.data ?? {};
   const entries = flattenEntries(data);
@@ -135,6 +139,76 @@ function TemplateStub({ item }: { item: ContentItem }): JSX.Element {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function PromoSlideRenderer({ item }: { item: ContentItem }): JSX.Element {
+  const data = item.data ?? {};
+  const bg = (data.background_color as string) ?? '#1a1a2e';
+  const textColor = (data.text_color as string) ?? '#ffffff';
+  const title = (data.title as string) ?? '';
+  const subtitle = (data.subtitle as string) ?? '';
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      backgroundColor: bg,
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden',
+    }}>
+      {/* Content ID — bottom left */}
+      <div style={{
+        position: 'absolute', bottom: '5%', left: '6%',
+        fontFamily: 'monospace', fontSize: 'clamp(0.45rem, 0.8vw, 0.7rem)',
+        opacity: 0.3, color: textColor,
+      }}>
+        {item.id}
+      </div>
+      {/* Close hint — bottom right */}
+      <div style={{
+        position: 'absolute', bottom: '5%', right: '6%',
+        fontFamily: 'system-ui', fontSize: 'clamp(0.45rem, 0.8vw, 0.7rem)',
+        opacity: 0.3, color: textColor,
+      }}>
+        close window to return
+      </div>
+
+      {title && (
+        <div style={{
+          color: textColor,
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: 'clamp(2.5rem, 8vw, 6rem)',
+          fontWeight: 800,
+          letterSpacing: '-0.02em',
+          textAlign: 'center',
+          lineHeight: 1.1,
+          maxWidth: '80%',
+          marginBottom: subtitle ? '4%' : 0,
+        }}>
+          {title}
+        </div>
+      )}
+      {subtitle && (
+        <div style={{
+          color: textColor,
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: 'clamp(1rem, 3vw, 2rem)',
+          fontWeight: 400,
+          textAlign: 'center',
+          lineHeight: 1.4,
+          maxWidth: '65%',
+          opacity: 0.75,
+        }}>
+          {subtitle}
+        </div>
+      )}
+      {!title && !subtitle && (
+        <div style={{ color: textColor, opacity: 0.4, fontFamily: 'system-ui', textAlign: 'center', fontSize: '1rem' }}>
+          No content — fill in title and subtitle in the form
+        </div>
+      )}
     </div>
   );
 }
