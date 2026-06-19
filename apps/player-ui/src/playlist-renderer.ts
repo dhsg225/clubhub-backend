@@ -20,6 +20,16 @@ export function renderPlaylist(items: PlaylistItem[]): void {
   scheduleNextItem();
 }
 
+export function showWaiting(): void {
+  const container = document.getElementById('content-container');
+  if (!container) return;
+  container.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#444;font-family:sans-serif;font-size:1.5rem;letter-spacing:0.02em;';
+  el.textContent = 'Waiting for content\u2026';
+  container.appendChild(el);
+}
+
 function scheduleNextItem(): void {
   if (renderTimer) clearTimeout(renderTimer);
   if (currentPlaylist.length === 0) return;

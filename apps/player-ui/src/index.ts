@@ -7,7 +7,11 @@
  * Constitutional constraint: emergency overlay cannot be suppressed by playlist logic.
  */
 
-import { renderPlaylist } from './playlist-renderer.js';
+// Dev test (no Pi required): set PLAYER_UI_DIR=/path/to/apps/player-ui in player-runtime
+// env, start player-runtime, then open http://localhost:3001 in a browser.
+// WebSocket connects to ws://localhost:7777.
+
+import { renderPlaylist, showWaiting } from './playlist-renderer.js';
 
 const WS_URL = 'ws://localhost:7777';
 
@@ -35,24 +39,28 @@ function connectToRuntime(): void {
       };
 
       switch (msg.type) {
-        case 'PLAYLIST_UPDATE':
-          if (msg.items) {
-            renderPlaylist(msg.items as PlaylistItem[]);
-            console.log(`[player-ui] Playlist updated checksum=${msg.checksum ?? 'unknown'}`);
+        case 'PLAYLIST_UPDATE': {
+          const items = (msg.items ?? []) as PlaylistItem[];
+          if (items.length === 0) {
+            showWaiting();
+          } else {
+            renderPlaylist(items);
           }
+          console.log(`[player-ui] Playlist updated checksum=${msg.checksum ?? 'unknown'} items=${items.length}`);
           break;
-        case 'EMERGENCY_FREEZE':
-          if (overlay) {
-            overlay.style.display = 'flex';
-            overlay.textContent = `EMERGENCY: ${msg.reason ?? 'Facility emergency in progress'}`;
-          }
+        }
+        case 'EMERGENCY_FREEZE': {
+          const titleEl = document.getElementById('emergency-title');
+          const messageEl = document.getElementById('emergency-message');
+          if (titleEl) titleEl.textContent = 'EMERGENCY';
+          if (messageEl) messageEl.textContent = msg.reason ?? 'Facility emergency in progress';
+          if (overlay) overlay.style.display = 'flex';
           console.log(`[player-ui] EMERGENCY_FREEZE activated: ${msg.reason ?? ''}`);
           break;
+        }
         case 'EMERGENCY_CLEAR':
-          if (overlay) {
-            overlay.style.display = 'none';
-            overlay.textContent = '';
-          }
+          if (overlay) overlay.style.display = 'none';
+          // Do NOT clear textContent — child elements must survive for next FREEZE
           console.log('[player-ui] EMERGENCY_FREEZE cleared');
           break;
         case 'CONSTITUTIONAL_STATE':
@@ -73,4 +81,5 @@ function connectToRuntime(): void {
   };
 }
 
+showWaiting();
 connectToRuntime();
