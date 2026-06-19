@@ -1,13 +1,24 @@
 /**
  * Playlist renderer for Pi player.
- * Constitutional: checksum verification before rendering any playlist.
- * Emergency overlay cannot be overridden by playlist logic.
+ * Constitutional: emergency overlay cannot be overridden by playlist logic.
+ *
+ * Rendering modes (D-012):
+ *   Static asset  — item has asset_path → plays image or video file
+ *   Data-driven   — item has template_type (no asset_path) → stub renderer
+ *                   Replace stub with production renderer per template type.
  */
+
+import { renderTemplateStub } from './template-stubs.js';
 
 interface PlaylistItem {
   content_id: string;
   duration_ms: number;
-  asset_path: string; // local file path verified by player-runtime
+  asset_path?: string;
+  template_type?: string;
+  data?: Record<string, unknown>;
+  weight?: number;
+  source?: number;
+  sponsored?: boolean;
 }
 
 let currentItemIndex = 0;
@@ -26,7 +37,7 @@ export function showWaiting(): void {
   container.innerHTML = '';
   const el = document.createElement('div');
   el.style.cssText = 'display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#444;font-family:sans-serif;font-size:1.5rem;letter-spacing:0.02em;';
-  el.textContent = 'Waiting for content\u2026';
+  el.textContent = 'Waiting for content…';
   container.appendChild(el);
 }
 
@@ -49,6 +60,14 @@ function displayItem(item: PlaylistItem): void {
   if (!container) return;
 
   container.innerHTML = '';
+
+  // Data-driven template — route to stub (replace stub with production renderer)
+  if (item.template_type && !item.asset_path) {
+    renderTemplateStub(container, item.template_type, item.data ?? {}, item.content_id);
+    return;
+  }
+
+  if (!item.asset_path) return;
 
   if (item.asset_path.endsWith('.mp4') || item.asset_path.endsWith('.webm')) {
     const video = document.createElement('video');

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createBrowserRouter } from 'react-router-dom';
+import { RouterProvider, createBrowserRouter, Navigate } from 'react-router-dom';
 import { ConstitutionalStateOverlay } from './components/constitutional/ConstitutionalStateOverlay.js';
 import { WebSocketConstitutionalSync } from './components/constitutional/WebSocketConstitutionalSync.js';
 import { AppLayout } from './components/layout/AppLayout.js';
@@ -35,9 +35,11 @@ const router = createBrowserRouter([
     children: [
       { path: '/', lazy: () => import('./routes/FleetDashboard.js') },
       { path: '/fleet', lazy: () => import('./routes/FleetDashboard.js') },
+      { path: '/venues', element: <Navigate to="/" replace /> },
       { path: '/venues/:venueId', lazy: () => import('./routes/VenueDashboard.js') },
       { path: '/campaigns', lazy: () => import('./routes/CampaignList.js') },
       { path: '/content/:id', lazy: () => import('./routes/ContentDetail.js') },
+      { path: '/templates', lazy: () => import('./routes/TemplateGallery.js') },
       { path: '/audit', lazy: () => import('./routes/AuditLog.js') },
       { path: '/constitutional', lazy: () => import('./routes/ConstitutionalConsole.js') },
     ],

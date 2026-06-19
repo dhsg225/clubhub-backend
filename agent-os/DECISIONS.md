@@ -136,6 +136,27 @@ All entries below are labelled `Source: codebase inference` unless a human has a
 
 ---
 
+## D-012 — Content authorship model: Option C (static assets + data-driven templates)
+
+**Decision**: The CMS supports two distinct content rendering modes, discriminated by `template_type`:
+
+- **Static asset types** (`image`, `video`): the corpus playlist item carries `asset_path` — a local file path on the Pi. `playlist-renderer.ts` plays it as `<img>` or `<video>`. Authored by uploading a file in the CMS.
+- **Data-driven types** (e.g. `promo_slide`, `menu_board`, `daily_specials`, `event_promo`): the corpus playlist item carries `template_type` + `data` (JSONB) instead of `asset_path`. The Pi renders these client-side in Chromium via pre-built HTML template renderers bundled in `player-ui`.
+
+**Rationale**: Static-asset-only would require pre-rendering data-driven content (menu boards, leaderboards, specials) to images at CMS publish time — losing dynamic update capability and requiring server-side rendering infrastructure. Data-driven rendering in Chromium on Pi 5 is feasible (Pi 5 has the horsepower) and keeps the corpus small. Both modes are needed: video/image assets for ambient/brand content, data templates for operational content (menus, specials, events).
+
+**Implication**:
+1. Corpus playlist item schema must be extended to carry `{template_type?, data?}` for data-driven items (alongside or replacing `asset_path`).
+2. `playlist-renderer.ts` needs a third rendering path: detect data-driven item (no `asset_path` or `asset_path` empty) → render via template component.
+3. CMS authoring UI shows a different form per `template_type` — field set is template-specific.
+4. Template renderer components must be bundled in `player-ui` for every supported `template_type`. Adding a new template type requires a player-ui update + OTA push.
+5. 72h offline autonomy is preserved: corpus already carries `data`, no network call needed at render time.
+
+**Source**: Human decision 2026-06-19
+**Status**: Active
+
+---
+
 ## D-011 — Contract gate (validate-contracts.js) is merge-blocking
 
 **Decision**: The 62-check contract validation script (`test-runner/contracts/validate-contracts.js`) must pass before any commit that touches governed files is merged.
