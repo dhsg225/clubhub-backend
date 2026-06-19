@@ -158,6 +158,18 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Role**: Feature Development (Frontend) — Agent 3
 - **Status**: DONE 2026-06-13 (Agent 3) — Schedule interface, SchedulesPanel component, PriorityBadge, scheduleTarget helper added. useQuery fetches /schedules?content_id=:id. 0 typecheck errors.
 
+### BL-020 — player-ui: fix overlay bug + loading state + build verification `[S]`
+- **What**: `apps/player-ui` is almost complete — WebSocket client, playlist renderer, HTML shell, UiServer, and ChromiumLauncher are all written and wired. Three gaps remain before first Pi deployment: (1) emergency overlay bug where `textContent` destroys child elements on clear, (2) blank black screen before first `PLAYLIST_UPDATE`, (3) dev workflow for testing without hardware is undocumented.
+- **Acceptance criteria**:
+  1. **Overlay bug fixed** — `EMERGENCY_FREEZE` sets text on `#emergency-title` / `#emergency-message` elements, not `overlay.textContent`. `EMERGENCY_CLEAR` hides the overlay without wiping child elements. Second FREEZE after a CLEAR renders correctly styled, not plain text.
+  2. **Loading state** — `#content-container` shows "Waiting for content…" on first load and when a `PLAYLIST_UPDATE` arrives with an empty `items` array. Not a blank black screen.
+  3. **Build verified** — `pnpm --filter @clubhub/player-ui build` passes, `dist/index.js` exists, path matches `UiServer`'s `/dist/*` route.
+  4. **Dev test confirmed** — `http://localhost:3001` (with `PLAYER_UI_DIR` pointed at `apps/player-ui`) loads the HTML, WebSocket client connects to `ws://localhost:7777`, loading state is visible. Document the env var in a code comment or `README`.
+  5. No new dependencies. `pnpm --filter @clubhub/player-ui build` stays 0 errors.
+- **Files**: `apps/player-ui/src/index.ts`, `apps/player-ui/src/playlist-renderer.ts`
+- **Role**: Feature Development (Frontend) — Agent 3
+- **Status**: TODO
+
 ---
 
 ## Future (no scope yet — do not build)
