@@ -134,34 +134,63 @@ async function computeManifest(screenId) {
     localNow = new Date(); // UTC — getUTCHours/getUTCDay accessors still correct
   }
 
-  // 3. Fetch all schedules that could target this screen
+  // 3. Fetch all schedules that could target this screen — two queries merged.
+  //    Query A: content-based schedules (content_id IS NOT NULL)
+  //    Query B: playlist-based schedules (playlist_id IS NOT NULL) — expands named_playlists items inline
   //    Priority: screen-specific > screen-group > venue-wide > global
-  const schedRes = await pool.query(
-    `SELECT s.id         AS schedule_id,
+
+  const TARGET_FILTER = `(
+    s.screen_id = $1
+    OR (s.screen_group IS NOT NULL AND s.screen_group = $2)
+    OR (s.venue_id = $3 AND s.screen_id IS NULL AND s.screen_group IS NULL)
+    OR (s.venue_id IS NULL AND s.screen_id IS NULL AND s.screen_group IS NULL)
+  )`;
+
+  const contentSchedRes = await pool.query(
+    `SELECT s.id AS schedule_id,
             s.content_id,
             s.priority,
             s.duration,
-            s.starts_at,
-            s.ends_at,
-            s.days_of_week,
-            s.time_of_day_start,
-            s.time_of_day_end,
+            s.starts_at, s.ends_at, s.days_of_week,
+            s.time_of_day_start, s.time_of_day_end,
             s.is_fallback,
             c.template_type,
-            c.data       AS content_data
+            c.data AS content_data
      FROM   schedules s
      JOIN   content   c ON c.id = s.content_id
-     WHERE
-       s.screen_id = $1
-       OR (s.screen_group IS NOT NULL AND s.screen_group = $2)
-       OR (s.venue_id = $3 AND s.screen_id IS NULL AND s.screen_group IS NULL)
-       OR (s.venue_id IS NULL AND s.screen_id IS NULL AND s.screen_group IS NULL)
+     WHERE  s.content_id IS NOT NULL
+       AND (c.expires_at IS NULL OR c.expires_at > NOW())
+       AND ${TARGET_FILTER}
      ORDER BY s.priority DESC, s.created_at ASC`,
     [screenId, screen.screen_group, screen.venue_id]
   );
 
+  const playlistSchedRes = await pool.query(
+    `SELECT s.id AS schedule_id,
+            (item->>'content_id')::uuid AS content_id,
+            s.priority,
+            COALESCE((item->>'duration_seconds')::int, 10) AS duration,
+            s.starts_at, s.ends_at, s.days_of_week,
+            s.time_of_day_start, s.time_of_day_end,
+            s.is_fallback,
+            c.template_type,
+            c.data AS content_data
+     FROM   schedules s
+     JOIN   named_playlists np ON np.id = s.playlist_id
+     CROSS  JOIN LATERAL jsonb_array_elements(np.items) AS item
+     JOIN   content c ON c.id = (item->>'content_id')::uuid
+     WHERE  s.playlist_id IS NOT NULL
+       AND (c.expires_at IS NULL OR c.expires_at > NOW())
+       AND ${TARGET_FILTER}
+     ORDER BY s.priority DESC, s.created_at ASC`,
+    [screenId, screen.screen_group, screen.venue_id]
+  );
+
+  const allSchedRows = [...contentSchedRes.rows, ...playlistSchedRes.rows]
+    .sort((a, b) => b.priority - a.priority);
+
   // 4. Filter to schedules currently active at localNow
-  const active   = schedRes.rows.filter(s => scheduleActive(s, localNow));
+  const active   = allSchedRows.filter(s => scheduleActive(s, localNow));
   const regular  = active.filter(s => !s.is_fallback);
   const fallback = active.filter(s =>  s.is_fallback);
 

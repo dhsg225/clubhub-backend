@@ -21,6 +21,7 @@ const assetsRouter    = require('./routes/assets');
 const venuesRouter    = require('./routes/venues');
 const screensRouter   = require('./routes/screens');
 const schedulesRouter = require('./routes/schedules');
+const resolveRouter        = require('./routes/resolve');
 const otaRouter            = require('./routes/ota');
 const namedPlaylistsRouter = require('./routes/named-playlists');
 
@@ -70,6 +71,7 @@ app.use('/health', healthRouter);
 
 // Manifest reads: generous limit — 10 screens × 4 req/min = 40 req/min expected
 app.use('/manifest',  rateLimit(120, 60_000), screenAuth.requireScreenToken, manifestRouter);
+app.use('/resolve',   rateLimit(120, 60_000), resolveRouter);
 
 // For browser navigation to API paths, serve the SPA instead of JSON.
 // API calls always carry X-Correlation-Id (set by api-client.ts);

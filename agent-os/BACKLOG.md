@@ -281,6 +281,18 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ---
 
+### BL-025 — Wire named_playlists into corpus delivery `[S]`
+- **What**: Fix manifest engine to resolve playlist-based schedules; add GET /resolve/:screen_id adapter.
+- **Status**: DONE 2026-06-20 — Agent 3
+
+---
+
+### BL-026 — Local full-system preview (player-runtime + player-ui in browser) `[S]`
+- **What**: Make it possible to run the complete player pipeline locally on Mac, pointing at production backend.
+- **Status**: DONE 2026-06-20 — Agent 3
+
+---
+
 ## Completed
 
 | Item | Date | Summary |
@@ -294,3 +306,5 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-F06 | 2026-06-19 | Playlist Composer complete. migrate_008.sql (named_playlists table), named-playlists.js Express router (5 endpoints), PlaylistList.tsx (/playlists), PlaylistComposer.tsx (/playlists/new + /playlists/:id), AppLayout Playlists nav link. Deployed to production. 0 typecheck errors. — Agent 3 |
 | BL-F07 | 2026-06-19 | Schedule Creator complete. migrate_009.sql (playlist_id FK on schedules), schedules.js extended (playlist_id support, LEFT JOIN named_playlists), ScheduleList.tsx (/schedules), ScheduleCreator.tsx (/schedules/new), AppLayout Schedules nav link, App.tsx routes wired. 118 modules built, 0 typecheck errors. Production deploy PENDING (SSH port 22 connection refused — port blocked). — Agent 3 |
 | BL-024 | 2026-06-20 | Zone support complete. migrate_010.sql (zone_name on schedules + layout_template on screens), schedules.js POST accepts zone_name, screens.js PATCH /:id added, ScheduleCreator.tsx layout+zone section, VenueDashboard.tsx layout column with inline select + optimistic UI + error revert, api-client.ts patch() added. 118 modules, 0 typecheck errors. Deployed to production. — Agent 3 |
+| BL-025 | 2026-06-20 | Corpus delivery wired. manifestEngine.js: split single INNER JOIN query into Query A (content-based) + Query B (playlist-based via LATERAL jsonb_array_elements), merged+sorted by priority. New backend/src/routes/resolve.js: GET /resolve/:screen_id transforms getManifest() into ResolvedPlaylist shape. Mounted in index.js with 120/60s rate limit. Deployed to production. Smoke test: /resolve/screen-1 returns 2-item playlist with checksum. — Agent 3 |
+| BL-026 | 2026-06-20 | Local preview environment. player-runtime/.env.local with DEV_NO_CHROMIUM=true + production CMS_API_URL + 15s poll. index.ts chromium.start() guarded by DEV_NO_CHROMIUM. "dev:local" script using tsx --env-file. player-ui built (dist/index.js). End-to-end verified: pnpm dev:local → ui-server on :3001 → playlist updated checksum=7574cc7e level=1 within 15s. — Agent 3 |

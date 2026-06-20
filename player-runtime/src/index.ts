@@ -45,7 +45,9 @@ async function main(): Promise<void> {
 
   // Serve player-ui static files, then start Chromium
   uiServer.start();
-  chromium.start();
+  if (!process.env['DEV_NO_CHROMIUM']) {
+    chromium.start();
+  }
 
   // Start orchestrator
   await orchestrator.start();
