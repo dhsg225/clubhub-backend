@@ -5,7 +5,7 @@ const router = express.Router();
 
 // POST /content
 router.post('/', async (req, res) => {
-  const { template_type, data, expires_at } = req.body;
+  const { template_type, data, expires_at, cross_post } = req.body;
 
   if (!template_type || !data) {
     return res.status(400).json({ error: 'template_type and data are required' });
@@ -20,6 +20,20 @@ router.post('/', async (req, res) => {
       'INSERT INTO content (template_type, data, expires_at, tenant_id) VALUES ($1, $2, $3, $4) RETURNING *',
       [template_type, JSON.stringify(cleanData), expires_at || null, req.tenantId]
     );
+
+    // BL-038: enqueue social cross-post job if requested
+    if (cross_post === true) {
+      try {
+        await pool.query(
+          'INSERT INTO social_jobs (content_id, platform, tenant_id) VALUES ($1, $2, $3)',
+          [result.rows[0].id, 'facebook', req.tenantId]
+        );
+      } catch (jobErr) {
+        // Non-fatal: content created, social job failed — log and continue
+        console.error('social_jobs insert failed:', jobErr.message);
+      }
+    }
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('POST /content:', err.message);

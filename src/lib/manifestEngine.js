@@ -71,6 +71,7 @@ async function computeManifest(screenId) {
   // 1. Resolve screen → venue → timezone
   const sRes = await pool.query(
     `SELECT s.id, s.venue_id, s.screen_group, s.name AS screen_name,
+            s.tenant_id,
             v.timezone, v.name AS venue_name
      FROM   screens s
      JOIN   venues  v ON v.id = s.venue_id
@@ -92,13 +93,13 @@ async function computeManifest(screenId) {
     // pre-create screens via POST /screens with the correct venue_id. A screen registered
     // here will use UTC scheduling and show under 'Default Venue' in Studio until corrected.
     await pool.query(
-      `INSERT INTO venues (id, name, timezone)
-       VALUES ('venue-1', 'Default Venue', 'UTC')
+      `INSERT INTO venues (id, name, timezone, tenant_id)
+       VALUES ('venue-1', 'Default Venue', 'UTC', (SELECT id FROM tenants WHERE slug='default' LIMIT 1))
        ON CONFLICT (id) DO NOTHING`
     );
     await pool.query(
-      `INSERT INTO screens (id, venue_id, name)
-       VALUES ($1, 'venue-1', $1)
+      `INSERT INTO screens (id, venue_id, name, tenant_id)
+       VALUES ($1, 'venue-1', $1, (SELECT id FROM tenants WHERE slug='default' LIMIT 1))
        ON CONFLICT (id) DO NOTHING`,
       [screenId]
     );
@@ -108,7 +109,7 @@ async function computeManifest(screenId) {
       note: 'Unknown screen auto-registered to default venue. Pre-create via POST /screens to assign correct venue.',
     }));
     screen = {
-      id: screenId, venue_id: 'venue-1', screen_group: null,
+      id: screenId, venue_id: 'venue-1', screen_group: null, tenant_id: null,
       timezone: 'UTC', venue_name: 'Default Venue',
     };
   } else {
@@ -134,34 +135,67 @@ async function computeManifest(screenId) {
     localNow = new Date(); // UTC — getUTCHours/getUTCDay accessors still correct
   }
 
-  // 3. Fetch all schedules that could target this screen
+  // 3. Fetch all schedules that could target this screen — two queries merged.
+  //    Query A: content-based schedules (content_id IS NOT NULL)
+  //    Query B: playlist-based schedules (playlist_id IS NOT NULL) — expands named_playlists items inline
   //    Priority: screen-specific > screen-group > venue-wide > global
-  const schedRes = await pool.query(
-    `SELECT s.id         AS schedule_id,
+
+  const TARGET_FILTER = `(
+    s.screen_id = $1
+    OR (s.screen_group IS NOT NULL AND s.screen_group = $2)
+    OR (s.venue_id = $3 AND s.screen_id IS NULL AND s.screen_group IS NULL)
+    OR (s.venue_id IS NULL AND s.screen_id IS NULL AND s.screen_group IS NULL)
+  )`;
+
+  const contentSchedRes = await pool.query(
+    `SELECT s.id AS schedule_id,
             s.content_id,
             s.priority,
             s.duration,
-            s.starts_at,
-            s.ends_at,
-            s.days_of_week,
-            s.time_of_day_start,
-            s.time_of_day_end,
+            s.starts_at, s.ends_at, s.days_of_week,
+            s.time_of_day_start, s.time_of_day_end,
             s.is_fallback,
+            s.zone_name,
             c.template_type,
-            c.data       AS content_data
+            c.data AS content_data
      FROM   schedules s
      JOIN   content   c ON c.id = s.content_id
-     WHERE
-       s.screen_id = $1
-       OR (s.screen_group IS NOT NULL AND s.screen_group = $2)
-       OR (s.venue_id = $3 AND s.screen_id IS NULL AND s.screen_group IS NULL)
-       OR (s.venue_id IS NULL AND s.screen_id IS NULL AND s.screen_group IS NULL)
+     WHERE  s.content_id IS NOT NULL
+       AND (c.expires_at IS NULL OR c.expires_at > NOW())
+       AND ($4::uuid IS NULL OR c.tenant_id = $4)
+       AND ${TARGET_FILTER}
      ORDER BY s.priority DESC, s.created_at ASC`,
-    [screenId, screen.screen_group, screen.venue_id]
+    [screenId, screen.screen_group, screen.venue_id, screen.tenant_id ?? null]
   );
 
+  const playlistSchedRes = await pool.query(
+    `SELECT s.id AS schedule_id,
+            (item->>'content_id')::uuid AS content_id,
+            s.priority,
+            COALESCE((item->>'duration_seconds')::int, 10) AS duration,
+            s.starts_at, s.ends_at, s.days_of_week,
+            s.time_of_day_start, s.time_of_day_end,
+            s.is_fallback,
+            s.zone_name,
+            c.template_type,
+            c.data AS content_data
+     FROM   schedules s
+     JOIN   named_playlists np ON np.id = s.playlist_id
+     CROSS  JOIN LATERAL jsonb_array_elements(np.items) AS item
+     JOIN   content c ON c.id = (item->>'content_id')::uuid
+     WHERE  s.playlist_id IS NOT NULL
+       AND (c.expires_at IS NULL OR c.expires_at > NOW())
+       AND ($4::uuid IS NULL OR c.tenant_id = $4)
+       AND ${TARGET_FILTER}
+     ORDER BY s.priority DESC, s.created_at ASC`,
+    [screenId, screen.screen_group, screen.venue_id, screen.tenant_id ?? null]
+  );
+
+  const allSchedRows = [...contentSchedRes.rows, ...playlistSchedRes.rows]
+    .sort((a, b) => b.priority - a.priority);
+
   // 4. Filter to schedules currently active at localNow
-  const active   = schedRes.rows.filter(s => scheduleActive(s, localNow));
+  const active   = allSchedRows.filter(s => scheduleActive(s, localNow));
   const regular  = active.filter(s => !s.is_fallback);
   const fallback = active.filter(s =>  s.is_fallback);
 
@@ -177,6 +211,7 @@ async function computeManifest(screenId) {
         data:             r.content_data,
         duration:         r.duration,
         priority:         r.priority,
+        zone_name:        r.zone_name ?? 'main',
         source,
       }));
   }
@@ -217,11 +252,19 @@ async function computeManifest(screenId) {
     }];
   }
 
-  // 9. Version: only increment when content actually changes
+  // 9. Group items by zone for zone-aware layout engine
+  const items_by_zone = {};
+  for (const item of items) {
+    const z = item.zone_name ?? 'main';
+    if (!items_by_zone[z]) items_by_zone[z] = [];
+    items_by_zone[z].push(item);
+  }
+
+  // 10. Version: only increment when content actually changes
   // FIX-1: include i.data in the signature — content edits (e.g. headline changes)
   //        now produce a different checksum and trigger a version bump.
   const sig  = items.map(i =>
-    `${i.content_id}:${i.duration}:${i.priority ?? 0}:${JSON.stringify(i.data)}`
+    `${i.content_id}:${i.duration}:${i.priority ?? 0}:${i.zone_name ?? 'main'}:${JSON.stringify(i.data)}`
   ).join('|');
   const csum = checksum(sig);
 
@@ -277,6 +320,7 @@ async function computeManifest(screenId) {
       valid_until:   validUntil.toISOString(),
       generated_at:  new Date().toISOString(), // kept for backward compat
       items,
+      items_by_zone,
       fallback_items: fallbackItems,
     };
 
