@@ -357,6 +357,55 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ---
 
+---
+
+## Cognito Guru Bridge (BL-045 → BL-047) — ClubHub calls Cognito as invisible engine
+
+**Architecture (D-020)**: Venue operators never see Cognito Guru. ClubHub calls Cognito GCFs backend-to-backend for AI generation, social publishing, and GBP. Venues are auto-provisioned as Cognito clients when onboarded in ClubHub. The `clubhub_tenant_id → cognito_client_id` mapping is stored in ClubHub DB.
+
+**Bridge GCF confirmed 2026-06-20**. Base URL + endpoint shapes + X-API-Key auth documented in D-020. Do BL-045 first (mapping table + bridge module), then BL-046 + BL-047 in parallel. Pre-requisite for social publishing: connect social accounts per venue in Cognito UI (one-time OAuth — see D-020).
+
+### BL-045 — Cognito bridge: venue auto-provisioning + tenant↔client mapping `[S]`
+- **What**: When a new tenant is created in ClubHub (via `POST /tenants`), automatically create a matching client in Cognito Guru via GCF call. Store the mapping `clubhub_tenant_id ↔ cognito_client_id` in a new `cognito_mappings` table. This is the foundation all other Cognito bridge items depend on.
+- **Acceptance criteria**:
+  1. `backend/db/migrate_018.sql`: `CREATE TABLE cognito_mappings (clubhub_tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE, cognito_client_id VARCHAR(100) NOT NULL, cognito_org_id VARCHAR(100), created_at TIMESTAMPTZ DEFAULT NOW())`
+  2. `backend/src/lib/cognito-bridge.js` (new): `provisionVenue(tenantId, venueName)` — POST to Cognito client-creation GCF endpoint, store returned `client_id` in `cognito_mappings`. Graceful: if `COGNITO_SERVICE_KEY` not set, log warn and skip (no crash).
+  3. `backend/src/routes/tenants.js` POST — after inserting tenant, call `provisionVenue()` (non-blocking, fire-and-forget).
+  4. `backend/src/lib/cognito-bridge.js`: `getCognitoClientId(tenantId)` — lookup from `cognito_mappings`, returns null if not mapped.
+  5. `backend/.env` gets `COGNITO_GCF_BASE_URL=https://us-central1-cognito-guru.cloudfunctions.net` and `COGNITO_SERVICE_KEY=<value>`.
+- **Files**: `backend/db/migrate_018.sql`, `backend/src/lib/cognito-bridge.js` (new), `backend/src/routes/tenants.js`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. migrate_018.sql: cognito_mappings table (clubhub_tenant_id PK → tenants, cognito_client_id, cognito_project_id). cognito-bridge.js: provisionVenue() POSTs to Cognito GCF provision endpoint, stores mapping on success, graceful skip when COGNITO_SERVICE_KEY not set. getCognitoClientId() lookups. tenants.js POST: fire-and-forget provisionVenue() after insert. Production: migration applied, POST /tenants creates tenant without crash when key is blank, GET /tenants returns 3 tenants.
+
+---
+
+### BL-046 — Social publishing via Cognito (replace social_jobs stub) `[S]`
+- **What**: Replace the `social-worker.js` stub (currently logs "would post") with a real call to Cognito's social GCF. The worker picks up `pending` jobs, looks up the tenant's `cognito_client_id`, and POSTs to Cognito's social scheduling endpoint. Cognito handles LateAPI → Facebook/Instagram/LinkedIn. ClubHub never touches LateAPI directly.
+- **Acceptance criteria**:
+  1. `backend/src/lib/social-worker.js` — `startSocialWorker()` updated: for each pending job, call `getCognitoClientId(tenant_id)` → if mapped, POST to `COGNITO_GCF_BASE_URL/social?endpoint=schedule` with `{ client_id, content: { text, media_url }, platforms: ['facebook'], schedule_at: 'now' }`. On 2xx: set status `'sent'`. On error: set status `'failed'` + store error message. If not mapped (no Cognito client yet): leave `pending`, log warn.
+  2. `social_jobs` table: `ALTER TABLE social_jobs ADD COLUMN IF NOT EXISTS cognito_post_id VARCHAR(100)` — store Cognito's returned post ID for traceability. Add to migrate_018.sql.
+  3. When `COGNITO_SERVICE_KEY` not set: worker logs warn + skips outbound call (existing stub behaviour preserved).
+  4. `apps/cms-web/src/routes/ContentNew.tsx` platform selector: currently hardcoded `'facebook'`. Accept `platforms` array, default `['facebook']`. Future-proof for multi-platform without code change.
+- **Note**: Before social publishing works for a venue, an operator must connect social accounts via Cognito UI (Settings → Social Connections). One-time per venue. Bridge cannot create OAuth connections.
+- **Files**: `backend/src/lib/social-worker.js`, `backend/db/migrate_018.sql`
+- **Role**: Feature Development
+- **Status**: TODO — depends on BL-045 (do BL-045 first)
+
+---
+
+### BL-047 — AI card authoring: "Write for me" in ContentNew.tsx `[M]`
+- **What**: Add a "Generate copy" button to ClubHub's card authoring form. ClubHub backend calls Cognito's AI GCF (OpenRouter/GPT-4o-mini underneath), returns generated copy, prefills the form fields. The operator sees instant AI-assisted content without knowing Cognito exists.
+- **Acceptance criteria**:
+  1. `backend/src/routes/ai.js` (new): `POST /ai/generate` — accepts `{ template_type, context: { venue_name, event_name?, prompt? } }`. Calls `COGNITO_GCF_BASE_URL/ai?endpoint=generate` with appropriate payload. Returns `{ fields: { title, subtitle?, description?, tagline? } }`. 501 when `COGNITO_SERVICE_KEY` not set.
+  2. `apps/cms-web/src/routes/ContentNew.tsx` — "Write for me ✨" button appears next to the template selector. On click: POST `/ai/generate` with current template_type + any filled context fields. On response: merge returned fields into `formData` (only overwrite empty fields — don't destroy operator's existing work). Loading spinner during generation. Error toast on failure.
+  3. Supported template types: `promo_slide` (title + subtitle), `event_banner` (description), `sponsor_banner` (tagline), `daily_specials` (headline). `menu_board` excluded (structured data, not copywriting).
+  4. `pnpm --filter @clubhub/cms-web typecheck` passes. `backend/src/index.js` mounts `/ai`.
+- **Files**: `backend/src/routes/ai.js` (new), `backend/src/index.js`, `apps/cms-web/src/routes/ContentNew.tsx`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Agent 3. ai.js: POST /ai/generate calls Cognito bridge GCF ai_generate endpoint with venue_id + template_slug + context. 501 when unconfigured, 400 for menu_board. Mounted at /ai with injectTenantContext. ContentNew.tsx: "Write for me" button below template selector (hidden for menu_board), merges generated fields into formData (only overwrites empty fields), loading state + error display. 0 typecheck errors. Deployed to production.
+
+---
+
 ## Future (no scope yet — do not build)
 
 | Item | Description |

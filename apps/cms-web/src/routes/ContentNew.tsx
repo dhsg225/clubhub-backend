@@ -732,6 +732,8 @@ export function Component(): JSX.Element {
   const [noExpiry, setNoExpiry] = useState(false);
   const [crossPost, setCrossPost] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Auto-select first template when catalogue loads
   useEffect(() => {
@@ -758,6 +760,36 @@ export function Component(): JSX.Element {
     setTemplateType(slug);
     setFormData(defaultDataFromSchema(tmpl.field_schema.fields));
     setValidationError(null);
+  }
+
+  async function handleAiGenerate(): Promise<void> {
+    if (templateType === 'menu_board') return;
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const result = await api.post<{ fields: Record<string, string> }>('/ai/generate', {
+        template_type: templateType,
+        context: formData,
+      });
+      // Merge generated fields — only overwrite empty fields
+      const merged = { ...formData };
+      for (const [key, value] of Object.entries(result.fields)) {
+        const existing = merged[key];
+        if (!existing || (typeof existing === 'string' && !existing.trim())) {
+          merged[key] = value;
+        }
+      }
+      setFormData(merged);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('501') || msg.includes('not configured')) {
+        setAiError('AI generation not configured on this server.');
+      } else {
+        setAiError(msg);
+      }
+    } finally {
+      setAiGenerating(false);
+    }
   }
 
   function handleSubmit(e: React.FormEvent): void {
@@ -827,6 +859,31 @@ export function Component(): JSX.Element {
               ))}
             </select>
           </FieldGroup>
+
+          {/* AI generation button — hidden for menu_board */}
+          {templateType !== 'menu_board' && (
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => void handleAiGenerate()}
+                disabled={aiGenerating}
+                style={{
+                  padding: '0.45rem 0.9rem',
+                  backgroundColor: aiGenerating ? '#e0e7ff' : '#eef2ff',
+                  color: aiGenerating ? '#6366f1' : '#4f46e5',
+                  border: '1px solid #c7d2fe', borderRadius: '6px',
+                  fontSize: '0.8rem', fontWeight: 600,
+                  cursor: aiGenerating ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                }}
+              >
+                {aiGenerating ? 'Generating…' : 'Write for me ✨'}
+              </button>
+              {aiError && (
+                <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', color: '#991b1b' }}>{aiError}</div>
+              )}
+            </div>
+          )}
 
           {/* Divider */}
           <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '0.25rem 0 1rem' }} />

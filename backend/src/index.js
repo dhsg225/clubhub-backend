@@ -27,6 +27,10 @@ const otaRouter            = require('./routes/ota');
 const namedPlaylistsRouter = require('./routes/named-playlists');
 const tickerRouter         = require('./routes/ticker');
 const tenantsRouter        = require('./routes/tenants');
+const sponsorRouter        = require('./routes/sponsor');
+const cardTemplatesRouter  = require('./routes/card-templates');
+const mediaRouter          = require('./routes/media');
+const aiRouter             = require('./routes/ai');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -104,6 +108,19 @@ app.use('/ticker', serveSpaForBrowser, rateLimit.write, injectTenantContext, tic
 // Tenant admin (BL-036)
 app.use('/tenants', serveSpaForBrowser, rateLimit.write, tenantsRouter);
 
+// Sponsor ingest (BL-037)
+app.use('/sponsor', rateLimit.write, injectTenantContext, sponsorRouter);
+
+// Card template catalogue (BL-040 / D-019 L2)
+// GET is public (tenant-scoped via injectTenantContext); POST is admin-only (guarded in router)
+app.use('/card-templates', serveSpaForBrowser, rateLimit.write, injectTenantContext, cardTemplatesRouter);
+
+// Media upload tokens (BL-041 — direct browser→Bunny upload)
+app.use('/media', rateLimit.write, injectTenantContext, mediaRouter);
+
+// AI generation via Cognito bridge (BL-047)
+app.use('/ai', serveSpaForBrowser, rateLimit.write, injectTenantContext, aiRouter);
+
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);
 app.use('/asset',     rateLimit.write, assetsRouter);
@@ -178,6 +195,10 @@ async function start() {
   try { await operatorSessions.initFromDb(pool); } catch { /* optional */ }
   govConfigInstance.setPool(pool);
   try { await govConfigInstance.initFromDb(pool); } catch { /* optional */ }
+
+  // BL-038: start social cross-posting worker
+  const { startSocialWorker } = require('./lib/social-worker');
+  startSocialWorker();
 
   app.listen(PORT, async () => {
     const { emit, EVENTS } = require('./lib/events');
