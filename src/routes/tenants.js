@@ -2,6 +2,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
+const { provisionVenue } = require('../lib/cognito-bridge');
 
 const router = express.Router();
 
@@ -35,7 +36,14 @@ router.post('/', requireAdminKey, async (req, res) => {
       'INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING *',
       [name, slug]
     );
-    res.status(201).json(r.rows[0]);
+    const tenant = r.rows[0];
+
+    // BL-045: auto-provision Cognito Guru client (fire-and-forget — don't block response)
+    provisionVenue(tenant.id, name).catch((err) => {
+      console.error(`[tenants] Cognito provision fire-and-forget error: ${err.message}`);
+    });
+
+    res.status(201).json(tenant);
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'slug already exists' });
     res.status(500).json({ error: err.message });
