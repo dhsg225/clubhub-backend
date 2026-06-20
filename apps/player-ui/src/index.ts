@@ -54,7 +54,8 @@ function connectToRuntime(): void {
           if (totalItems === 0) {
             showWaiting();
           } else if (container) {
-            renderLayout(container, screenLayout, zones);
+            const corpusData = (msg as unknown as Record<string, unknown>)['corpus_data'] as Record<string, unknown> ?? {};
+            renderLayout(container, screenLayout, zones, corpusData);
           }
           console.log(`[player-ui] Playlist updated checksum=${msg.checksum ?? 'unknown'} layout=${screenLayout} zones=${Object.keys(zones).join(',')}`);
           break;

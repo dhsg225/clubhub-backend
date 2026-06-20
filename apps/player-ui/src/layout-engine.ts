@@ -1,16 +1,24 @@
 /**
  * Layout engine — renders a CSS grid layout and runs per-zone playlist rotations.
+ * Reads layout definitions from layout-definitions.ts and widget registry from widget-registry.ts.
+ * No widget logic is hardcoded here (D-017).
  *
  * D-015 / D-016 vocabulary:
- *   Layout  — the named CSS grid geometry (fullscreen, split_horizontal, news_bar, quad)
- *   Zone    — a named grid area that receives either a card playlist or a widget
- *   Card    — a rendered piece of authored content (dispatched via renderCard)
- *   Widget  — a programmatic real-time display (BL-032 — not yet wired here)
+ *   Layout  — the named CSS grid geometry
+ *   Zone    — a named grid area (receives cards OR widgets)
+ *   Card    — rendered authored content (via renderCard)
+ *   Widget  — programmatic real-time display (via widget registry)
  *
  * Constitutional: layout engine never overrides emergency overlay logic in index.ts.
  */
 
 import { renderCard } from './template-stubs.js';
+import { LAYOUTS } from './layout-definitions.js';
+import { instantiateWidget, type WidgetInstance } from './widget-registry.js';
+
+// Trigger widget self-registration on import
+import './widgets/clock.js';
+import './widgets/date-display.js';
 
 interface PlaylistItem {
   content_id: string;
@@ -24,74 +32,50 @@ interface PlaylistItem {
   sponsored?: boolean;
 }
 
-interface LayoutConfig {
-  grid_template_areas: string;
-  grid_template_rows: string;
-  grid_template_columns: string;
-  zones: string[];          // all named grid areas
-  playlist_zones: string[]; // zones that receive card rotation (vs widget zones)
-}
-
-const LAYOUTS: Record<string, LayoutConfig> = {
-  fullscreen: {
-    grid_template_areas:   '"main"',
-    grid_template_rows:    '1fr',
-    grid_template_columns: '1fr',
-    zones:          ['main'],
-    playlist_zones: ['main'],
-  },
-  split_horizontal: {
-    grid_template_areas:   '"main_left main_right" "ticker ticker"',
-    grid_template_rows:    '90% 10%',
-    grid_template_columns: '1fr 1fr',
-    zones:          ['main_left', 'main_right', 'ticker'],
-    playlist_zones: ['main_left', 'main_right'],
-  },
-  news_bar: {
-    grid_template_areas:   '"main" "ticker"',
-    grid_template_rows:    '90% 10%',
-    grid_template_columns: '1fr',
-    zones:          ['main', 'ticker'],
-    playlist_zones: ['main'],
-  },
-  quad: {
-    grid_template_areas:   '"top_left top_right" "bottom_left bottom_right"',
-    grid_template_rows:    '1fr 1fr',
-    grid_template_columns: '1fr 1fr',
-    zones:          ['top_left', 'top_right', 'bottom_left', 'bottom_right'],
-    playlist_zones: ['top_left', 'top_right', 'bottom_left', 'bottom_right'],
-  },
-};
-
 // Active per-zone rotation timers — cleared before each re-render
 let activeTimers: ReturnType<typeof setTimeout>[] = [];
+// Active widget instances — destroyed before each re-render
+let activeWidgets: WidgetInstance[] = [];
 
 export function renderLayout(
   container: HTMLElement,
   screenLayout: string,
   zones: Record<string, PlaylistItem[]>,
+  corpusData: Record<string, unknown> = {},
 ): void {
-  // Clear any running rotations from previous render
+  // Destroy previous widget instances
+  for (const w of activeWidgets) w.destroy();
+  activeWidgets = [];
+
+  // Clear any running rotations
   for (const t of activeTimers) clearTimeout(t);
   activeTimers = [];
 
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const layout: LayoutConfig = LAYOUTS[screenLayout] ?? LAYOUTS['fullscreen']!;
+  const layoutDef = LAYOUTS[screenLayout] ?? LAYOUTS['fullscreen']!;
 
   // Build outer grid
   container.innerHTML = '';
   container.style.cssText = [
     'width:100%', 'height:100%',
     'display:grid',
-    `grid-template-areas:${layout.grid_template_areas}`,
-    `grid-template-rows:${layout.grid_template_rows}`,
-    `grid-template-columns:${layout.grid_template_columns}`,
+    `grid-template-areas:${layoutDef.grid_areas}`,
+    `grid-template-rows:${layoutDef.grid_rows}`,
+    `grid-template-columns:${layoutDef.grid_cols}`,
     'overflow:hidden',
     'background:#000',
   ].join(';');
 
-  // Create a div per zone
-  for (const zoneName of layout.zones) {
+  // Collect all zone names from playlist_zones + widget_slots
+  const allZones = new Set<string>([
+    ...layoutDef.playlist_zones,
+    ...layoutDef.widget_slots.map(s => s.zone),
+  ]);
+
+  // Map: zoneName → div element
+  const zoneDivs = new Map<string, HTMLElement>();
+
+  for (const zoneName of allZones) {
     const zoneDiv = document.createElement('div');
     zoneDiv.dataset['zone'] = zoneName;
     zoneDiv.style.cssText = [
@@ -104,14 +88,75 @@ export function renderLayout(
       'overflow:hidden',
     ].join(';');
     container.appendChild(zoneDiv);
+    zoneDivs.set(zoneName, zoneDiv);
 
-    // Only playlist_zones get card rotation
-    if (!layout.playlist_zones.includes(zoneName)) continue;
+    // Start card rotation for playlist zones
+    if (layoutDef.playlist_zones.includes(zoneName)) {
+      const items = zones[zoneName] ?? [];
+      if (items.length > 0) startZoneRotation(zoneDiv, items);
+    }
+  }
 
-    const items = zones[zoneName] ?? [];
-    if (items.length === 0) continue;
+  // Wire widget slots — subdivide zone divs as needed
+  // Group slots by zone so we only split each zone div once
+  const slotsByZone = new Map<string, typeof layoutDef.widget_slots>();
+  for (const slot of layoutDef.widget_slots) {
+    const existing = slotsByZone.get(slot.zone) ?? [];
+    existing.push(slot);
+    slotsByZone.set(slot.zone, existing);
+  }
 
-    startZoneRotation(zoneDiv, items);
+  for (const [zoneName, slots] of slotsByZone) {
+    const zoneDiv = zoneDivs.get(zoneName);
+    if (!zoneDiv) continue;
+
+    const hasLeftFixed = slots.some(s => s.position === 'left-fixed');
+
+    if (hasLeftFixed) {
+      // Split the zone div into a left sub-div (fixed width) and right sub-div (fill)
+      zoneDiv.style.cssText += ';display:flex;flex-direction:row;align-items:stretch;';
+
+      for (const slot of slots) {
+        const subDiv = document.createElement('div');
+
+        if (slot.position === 'left-fixed') {
+          subDiv.style.cssText = [
+            `width:${slot.width ?? 120}px`,
+            'flex-shrink:0',
+            'height:100%',
+            'overflow:hidden',
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+          ].join(';');
+        } else {
+          // fill
+          subDiv.style.cssText = [
+            'flex:1',
+            'min-width:0',
+            'height:100%',
+            'overflow:hidden',
+          ].join(';');
+        }
+
+        zoneDiv.appendChild(subDiv);
+
+        const config: Record<string, unknown> = slot.corpus_key
+          ? { items: corpusData[slot.corpus_key] ?? [] }
+          : {};
+        const instance = instantiateWidget(slot.widget, subDiv, config);
+        activeWidgets.push(instance);
+      }
+    } else {
+      // Non-split: give each slot the full zone div (last slot wins if multiple)
+      for (const slot of slots) {
+        const config: Record<string, unknown> = slot.corpus_key
+          ? { items: corpusData[slot.corpus_key] ?? [] }
+          : {};
+        const instance = instantiateWidget(slot.widget, zoneDiv, config);
+        activeWidgets.push(instance);
+      }
+    }
   }
 }
 
