@@ -267,3 +267,89 @@ All entries below are labelled `Source: codebase inference` unless a human has a
 
 **Source**: Human decision 2026-06-20 — Gemini architecture review + vocabulary audit
 **Status**: Active
+
+---
+
+## D-017 — Widget Registry architecture
+
+**Decision**: Widgets are registered into a central registry and instantiated by the layout engine via a slot-based definition. No widget logic is hardcoded in the layout engine itself.
+
+**Three components:**
+
+**1. Widget Registry** (`apps/player-ui/src/widget-registry.ts`)
+
+```typescript
+export interface WidgetInstance {
+  destroy(): void;
+  update?(data: unknown): void;
+}
+type WidgetFactory = (container: HTMLElement, config: Record<string, unknown>) => WidgetInstance;
+
+registerWidget(name: string, factory: WidgetFactory): void
+instantiateWidget(name: string, container: HTMLElement, config: Record<string, unknown>): WidgetInstance
+```
+
+Each widget file registers itself on import. The layout engine imports widget files to trigger registration, then calls `instantiateWidget()` by name.
+
+**2. Layout Definitions** (`apps/player-ui/src/layout-definitions.ts`)
+
+Each Layout has a typed definition:
+```typescript
+interface WidgetSlot {
+  zone: string;
+  position: 'left-fixed' | 'fill' | 'full';
+  width?: number;        // px — used when position is 'left-fixed'
+  widget: string;        // registry key
+  corpus_key?: string;   // key in /resolve response to use as widget data
+}
+interface LayoutDefinition {
+  grid_areas: string;
+  grid_rows: string;
+  grid_cols: string;
+  playlist_zones: string[];   // zones that receive card playlist rotation
+  widget_slots: WidgetSlot[];
+}
+```
+
+Initial layout definitions:
+```
+fullscreen:      playlist_zones: [main],  widget_slots: []
+split_horizontal: playlist_zones: [main_left, main_right],
+                  widget_slots: [
+                    { zone: ticker, position: left-fixed, width: 120, widget: clock },
+                    { zone: ticker, position: fill, widget: ticker_scroll, corpus_key: ticker_items }
+                  ]
+news_bar:        playlist_zones: [main],
+                  widget_slots: [
+                    { zone: ticker, position: left-fixed, width: 120, widget: clock },
+                    { zone: ticker, position: fill, widget: ticker_scroll, corpus_key: ticker_items }
+                  ]
+quad:            playlist_zones: [top_left, top_right, bottom_left, bottom_right], widget_slots: []
+```
+
+**3. Layout Engine contract** (`apps/player-ui/src/layout-engine.ts`)
+
+`renderLayout(container, screenLayout, zones, corpusData)`:
+1. Look up `LAYOUTS[screenLayout]`
+2. Build CSS grid + zone divs
+3. For each `playlist_zone` with items → start card rotation loop
+4. For each `widget_slot`:
+   - Sub-divide zone div if `position` is `left-fixed` (creates two sibling divs)
+   - Resolve config: `{ items: corpusData[slot.corpus_key] ?? [] }` for data-driven widgets, `{}` for static ones
+   - Call `instantiateWidget(slot.widget, slotDiv, config)`
+   - Store the WidgetInstance for cleanup on next render cycle
+
+**Ticker widget data contract:**
+
+The `ticker_scroll` widget receives `config.items: string[]`. It does not know or care about the source. Future content sources (regional news API, sponsored portal) are prepended/appended to this array by the resolve endpoint before delivery — the widget is source-agnostic.
+
+**Known future widgets (do not build yet — register when ready):**
+- `weather` — config: `{ location, unit }`
+- `specials` — config: `{ items: DailySpecialItem[] }` — pulls today's daily_specials cards
+- `countdown` — config: `{ target_datetime, label }`
+- `sponsored_ticker` — extension of ticker_scroll with source attribution
+
+**Implication**: Adding a new widget requires only: (1) a new file in `widgets/`, (2) a `registerWidget()` call in that file, (3) a new `widget_slot` entry in the relevant `LayoutDefinition`. The layout engine needs no changes.
+
+**Source**: Human decision 2026-06-20
+**Status**: Active

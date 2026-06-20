@@ -393,43 +393,59 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ---
 
-### BL-032 — Widget system: Clock + DateDisplay `[S]`
-- **What**: The `ticker` and `branding` zones in multi-zone layouts need permanent, real-time widgets that are not cards and not scheduled. Clock and DateDisplay are the first two — they read Pi local time and update continuously. The layout engine (BL-031) injects them into designated zones at boot, independent of the corpus/schedule path.
-- **Widget zone assignments** (hardcoded per layout):
-  - `split_horizontal` → ticker zone left bracket: Clock widget
-  - `news_bar` → ticker zone left bracket: Clock widget
-  - Any layout with a `branding` zone: DateDisplay widget (future — no branding zone exists yet)
+### BL-032 — Widget Registry + Layout Definitions + Clock + DateDisplay `[M]`
+- **What**: Establish the Widget Registry pattern (D-017) so all future widgets plug in without touching the layout engine. Then implement Clock and DateDisplay as the first two registered widgets. Replaces the hardcoded injection approach from the original BL-032 spec.
+- **New files**:
+  - `apps/player-ui/src/widget-registry.ts` — `WidgetInstance` interface, `registerWidget()`, `instantiateWidget()`
+  - `apps/player-ui/src/layout-definitions.ts` — `LAYOUTS` constant with all 4 layout definitions (see D-017 for full schema and slot values)
+  - `apps/player-ui/src/widgets/clock.ts` — registers itself as `'clock'`; factory returns `WidgetInstance` that mounts a live HH:MM:SS display, updates every 1s via `setInterval`, calls `destroy()` to clear interval
+  - `apps/player-ui/src/widgets/date-display.ts` — registers itself as `'date_display'`; factory returns `WidgetInstance` showing "Friday 20 June" format, updates at midnight
+- **Edit**: `apps/player-ui/src/layout-engine.ts`
+  - Add `corpusData: Record<string, unknown>` param to `renderLayout()`
+  - Import widget files (triggers self-registration)
+  - After building grid + playlist rotations, iterate `layoutDef.widget_slots`:
+    - If `position === 'left-fixed'`: split zone div — create a `width: {slot.width}px; flex-shrink: 0` left sub-div and a `flex: 1` right sub-div
+    - Resolve config: `{ items: corpusData[slot.corpus_key] ?? [] }` (or `{}` for static widgets)
+    - Call `instantiateWidget(slot.widget, subDiv, config)`
+    - Store all instances in an array; call `destroy()` on each before next `renderLayout()` call
+  - Update `index.ts` call site to pass `corpusData` (use `{}` for now — BL-033 fills it)
+- **Widget styling**: white text, monospace for clock, vertically centred in their sub-div, `font-size: clamp(0.7rem, 1.6cqw, 1rem)`, no overflow bleed
 - **Acceptance criteria**:
-  1. `apps/player-ui/src/widgets/clock.ts` (new) — `renderClock(container)`: mounts a live clock (HH:MM:SS) into the given div, updates every second via `setInterval`. Reads `Date()` — no external API. CSS: white monospace text, vertically centred, no bleed into adjacent zones.
-  2. `apps/player-ui/src/widgets/date-display.ts` (new) — `renderDateDisplay(container)`: mounts a formatted date (e.g. "Friday 20 June") updating at midnight. Same styling rules.
-  3. `layout-engine.ts` updated — after building the grid, check if the layout has a `ticker` zone with no playlist items → inject Clock widget into the left 120px of the ticker zone. Zone with playlist items plays cards as normal.
-  4. `pnpm --filter @clubhub/player-ui build` passes.
-- **Files**: `apps/player-ui/src/widgets/clock.ts` (new), `apps/player-ui/src/widgets/date-display.ts` (new), `apps/player-ui/src/layout-engine.ts`
+  1. `widget-registry.ts` exports `WidgetInstance`, `registerWidget`, `instantiateWidget`
+  2. `layout-definitions.ts` exports `LAYOUTS` with correct slot definitions for all 4 layouts per D-017
+  3. Clock widget: mounts, ticks every second, `destroy()` clears the interval
+  4. `news_bar` layout → ticker zone left 120px shows live clock; right side is empty (BL-033 will fill it)
+  5. No hardcoded widget logic anywhere in `layout-engine.ts` — it only reads `LAYOUTS` and calls `instantiateWidget()`
+  6. `pnpm --filter @clubhub/player-ui build` passes
+- **Files**: `widget-registry.ts` (new), `layout-definitions.ts` (new), `widgets/clock.ts` (new), `widgets/date-display.ts` (new), `layout-engine.ts`, `index.ts`
 - **Role**: Feature Development — Agent 3
 - **Status**: TODO
 
 ---
 
 ### BL-033 — TickerScroll widget + ticker content authoring `[M]`
-- **What**: The scroll engine for the `ticker` zone. Operators author text strings in the CMS (club news items); these are included in the `/resolve` corpus payload and rendered as a continuously scrolling strip using CSS `transform: translateX` (hardware-accelerated). MVP source: club-authored text only (no external news APIs — those are future).
+- **What**: Third registered widget. Operators author text strings for the ticker in the CMS; these are delivered via `/resolve` under `ticker_items`; the layout engine passes them to the `ticker_scroll` widget via the registry's `corpus_key` mechanism (D-017). The widget is source-agnostic — it receives `string[]` and scrolls them regardless of origin. Future sources (regional news, sponsored text) are appended to this array server-side without touching the widget.
 - **DB + backend**:
-  - `migrate_012.sql`: new table `ticker_items (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, screen_id VARCHAR(64) REFERENCES screens(id) ON DELETE CASCADE, text VARCHAR(280) NOT NULL, display_order INTEGER DEFAULT 0, active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT NOW())`
-  - New route `backend/src/routes/ticker.js`: `GET /ticker?screen_id=:id` returns active items ordered by display_order; `POST /ticker` creates an item; `PATCH /ticker/:id` updates text/active/order; `DELETE /ticker/:id`
-  - `resolve.js` extended: include `ticker_items` array in response alongside `zones`
+  - `migrate_012.sql`: `CREATE TABLE ticker_items (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, screen_id VARCHAR(64) REFERENCES screens(id) ON DELETE CASCADE, text VARCHAR(280) NOT NULL, display_order INTEGER DEFAULT 0, active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT NOW())`
+  - `backend/src/routes/ticker.js` (new, CommonJS): `GET /ticker?screen_id=:id`, `POST /ticker`, `PATCH /ticker/:id`, `DELETE /ticker/:id`
+  - `backend/src/index.js`: mount ticker router
+  - `backend/src/routes/resolve.js`: add `ticker_items: string[]` to response (SELECT text FROM ticker_items WHERE screen_id = $1 AND active = true ORDER BY display_order)
 - **Player widget**:
-  - `apps/player-ui/src/widgets/ticker-scroll.ts` (new) — `renderTickerScroll(container, items: string[])`: renders a horizontally scrolling strip. Implementation: inner div with all items joined by separators (`·`), animated with `@keyframes` or `requestAnimationFrame` translate3d for smooth 60fps scroll. Speed: ~80px/s. Loops infinitely. If `items` is empty, renders nothing (zone shows Clock only).
-  - `layout-engine.ts` updated — when `ticker` zone present and `ticker_items` exist in corpus: split ticker zone — Clock widget left 120px, TickerScroll widget fills remainder.
+  - `apps/player-ui/src/widgets/ticker-scroll.ts` (new) — registers itself as `'ticker_scroll'`
+  - Factory receives `config.items: string[]`; if empty → returns no-op WidgetInstance (empty container, clock fills full ticker zone)
+  - Render: inner div with items joined by ` · `, CSS `@keyframes` horizontal scroll using `transform: translateX`, hardware-accelerated. Speed ~80px/s — calculate `animation-duration` from total string length. `animation-iteration-count: infinite; animation-timing-function: linear`
+  - Returns `WidgetInstance` with `destroy()` (removes element) and `update(items)` (replaces text, recalculates duration)
 - **CMS authoring**:
-  - `apps/cms-web/src/routes/TickerManager.tsx` (new) — `/ticker` route. Table of active ticker items for the selected screen. Add/edit/delete/reorder. Simple text input, 280 char limit. No expiry (ticker items are manually managed).
-  - `AppLayout.tsx` — add "Ticker" nav link
-  - `App.tsx` — wire `/ticker` route
+  - `apps/cms-web/src/routes/TickerManager.tsx` (new) — `/ticker` route. Screen selector at top. Table: text (inline editable), active toggle, display_order up/down, delete. "Add item" → text input + save. 280 char limit shown. No expiry.
+  - `apps/cms-web/src/components/layout/AppLayout.tsx`: add "Ticker" nav link
+  - `apps/cms-web/src/App.tsx`: wire `/ticker` lazy route
 - **Acceptance criteria**:
-  1. Operator can add ticker text in CMS → appears in `/resolve` response under `ticker_items`
-  2. `news_bar` or `split_horizontal` layout on a screen → ticker zone shows scrolling text + clock
-  3. Scroll is smooth (translate3d, no reflow), loops continuously
-  4. Empty ticker → zone shows Clock only, no blank/broken strip
+  1. `ticker_scroll` widget registered; `LAYOUTS` slot `corpus_key: 'ticker_items'` feeds it automatically via layout engine
+  2. Operator adds text in `/ticker` CMS → `GET /resolve/screen-1` returns `ticker_items: [...]`
+  3. `news_bar` screen → ticker zone: clock left 120px + scrolling text right. Smooth, loops, no reflow
+  4. Empty `ticker_items` → clock fills full ticker zone, no broken strip
   5. `pnpm --filter @clubhub/cms-web typecheck` passes; `pnpm --filter @clubhub/player-ui build` passes
-- **Files**: `backend/db/migrate_012.sql` (new), `backend/src/routes/ticker.js` (new), `backend/src/routes/resolve.js`, `apps/player-ui/src/widgets/ticker-scroll.ts` (new), `apps/player-ui/src/layout-engine.ts`, `apps/cms-web/src/routes/TickerManager.tsx` (new), `apps/cms-web/src/App.tsx`, `apps/cms-web/src/components/layout/AppLayout.tsx`
+- **Files**: `backend/db/migrate_012.sql` (new), `backend/src/routes/ticker.js` (new), `backend/src/routes/resolve.js`, `backend/src/index.js`, `apps/player-ui/src/widgets/ticker-scroll.ts` (new), `apps/cms-web/src/routes/TickerManager.tsx` (new), `apps/cms-web/src/App.tsx`, `apps/cms-web/src/components/layout/AppLayout.tsx`
 - **Role**: Feature Development — Agent 3
 - **Status**: TODO
 
