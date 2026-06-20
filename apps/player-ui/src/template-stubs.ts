@@ -42,7 +42,7 @@ export function renderCard(
       titleEl.style.cssText = [
         `color:${textColor}`,
         'font-family:system-ui,sans-serif',
-        'font-size:clamp(2.5rem, 8vw, 6rem)',
+        'font-size:clamp(2.5rem, 8cqw, 6rem)',
         'font-weight:800',
         'letter-spacing:-0.02em',
         'text-align:center',
@@ -59,7 +59,7 @@ export function renderCard(
       subtitleEl.style.cssText = [
         `color:${textColor}`,
         'font-family:system-ui,sans-serif',
-        'font-size:clamp(1rem, 3vw, 2rem)',
+        'font-size:clamp(1rem, 3cqw, 2rem)',
         'font-weight:400',
         'text-align:center',
         'line-height:1.4',
@@ -94,19 +94,19 @@ export function renderCard(
 
     if (eventName) {
       const nameEl = document.createElement('div');
-      nameEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(2rem,6vw,5rem);font-weight:800;letter-spacing:-0.02em;text-align:center;line-height:1.1;max-width:80%;margin-bottom:6%;';
+      nameEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(2rem,6cqw,5rem);font-weight:800;letter-spacing:-0.02em;text-align:center;line-height:1.1;max-width:80%;margin-bottom:6%;';
       nameEl.textContent = eventName;
       wrapper.appendChild(nameEl);
     }
     if (dateTime) {
       const dtEl = document.createElement('div');
-      dtEl.style.cssText = 'color:#EA580C;font-family:system-ui,sans-serif;font-size:clamp(1rem,3vw,2.2rem);font-weight:700;text-align:center;margin-bottom:5%;letter-spacing:0.04em;';
+      dtEl.style.cssText = 'color:#EA580C;font-family:system-ui,sans-serif;font-size:clamp(1rem,3cqw,2.2rem);font-weight:700;text-align:center;margin-bottom:5%;letter-spacing:0.04em;';
       dtEl.textContent = dateTime;
       wrapper.appendChild(dtEl);
     }
     if (description) {
       const descEl = document.createElement('div');
-      descEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,2vw,1.4rem);font-weight:400;text-align:center;line-height:1.5;max-width:65%;opacity:0.7;';
+      descEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,2cqw,1.4rem);font-weight:400;text-align:center;line-height:1.5;max-width:65%;opacity:0.7;';
       descEl.textContent = description;
       wrapper.appendChild(descEl);
     }
@@ -128,19 +128,19 @@ export function renderCard(
 
     if (sponsorName) {
       const nameEl = document.createElement('div');
-      nameEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(2.5rem,7vw,5.5rem);font-weight:800;letter-spacing:-0.02em;text-align:center;line-height:1.1;max-width:80%;margin-bottom:5%;';
+      nameEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(2.5rem,7cqw,5.5rem);font-weight:800;letter-spacing:-0.02em;text-align:center;line-height:1.1;max-width:80%;margin-bottom:5%;';
       nameEl.textContent = sponsorName;
       wrapper.appendChild(nameEl);
     }
     if (tier) {
       const tierEl = document.createElement('div');
-      tierEl.style.cssText = `background:${tierColor};color:#111;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,1.8vw,1.2rem);font-weight:700;padding:0.4em 1.2em;border-radius:999px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6%;`;
+      tierEl.style.cssText = `background:${tierColor};color:#111;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,1.8cqw,1.2rem);font-weight:700;padding:0.4em 1.2em;border-radius:999px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6%;`;
       tierEl.textContent = tier;
       wrapper.appendChild(tierEl);
     }
     if (tagline) {
       const tagEl = document.createElement('div');
-      tagEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.8rem,2.2vw,1.5rem);font-weight:400;text-align:center;line-height:1.4;max-width:60%;opacity:0.7;';
+      tagEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.8rem,2.2cqw,1.5rem);font-weight:400;text-align:center;line-height:1.4;max-width:60%;opacity:0.7;';
       tagEl.textContent = tagline;
       wrapper.appendChild(tagEl);
     }
@@ -167,7 +167,7 @@ export function renderCard(
 
       if (section.section_title) {
         const titleEl = document.createElement('div');
-        titleEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.8rem,2vw,1.4rem);font-weight:700;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:0.5em;margin-bottom:0.75em;';
+        titleEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.8rem,2cqw,1.4rem);font-weight:700;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:0.5em;margin-bottom:0.75em;';
         titleEl.textContent = section.section_title;
         col.appendChild(titleEl);
       }
@@ -175,7 +175,7 @@ export function renderCard(
       const items = section.items ?? [];
       items.forEach((it, ii) => {
         const itemRow = document.createElement('div');
-        itemRow.style.cssText = `display:flex;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.65rem,1.4vw,1rem);padding:0.4em 0;${ii < items.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.1);' : ''}`;
+        itemRow.style.cssText = `display:flex;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.65rem,1.4cqw,1rem);padding:0.4em 0;${ii < items.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.1);' : ''}`;
         if (it.name) {
           const nameEl = document.createElement('span');
           nameEl.textContent = it.name;
@@ -208,7 +208,7 @@ export function renderCard(
 
     if (headline) {
       const headEl = document.createElement('div');
-      headEl.style.cssText = 'color:#DC2626;font-family:system-ui,sans-serif;font-size:clamp(1.5rem,4.5vw,3.5rem);font-weight:800;text-transform:uppercase;text-align:center;letter-spacing:0.06em;margin-bottom:6%;';
+      headEl.style.cssText = 'color:#DC2626;font-family:system-ui,sans-serif;font-size:clamp(1.5rem,4.5cqw,3.5rem);font-weight:800;text-transform:uppercase;text-align:center;letter-spacing:0.06em;margin-bottom:6%;';
       headEl.textContent = headline;
       wrapper.appendChild(headEl);
     }
@@ -217,7 +217,7 @@ export function renderCard(
     list.style.cssText = 'width:100%;max-width:900px;';
     rawItems.forEach((it, ii) => {
       const itemRow = document.createElement('div');
-      itemRow.style.cssText = `display:flex;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,2vw,1.3rem);padding:0.55em 0;${ii < rawItems.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.12);' : ''}`;
+      itemRow.style.cssText = `display:flex;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,2cqw,1.3rem);padding:0.55em 0;${ii < rawItems.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.12);' : ''}`;
       if (it.dish_name) {
         const nameEl = document.createElement('span');
         nameEl.textContent = it.dish_name;

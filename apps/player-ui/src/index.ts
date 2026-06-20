@@ -11,14 +11,18 @@
 // env, start player-runtime, then open http://localhost:3001 in a browser.
 // WebSocket connects to ws://localhost:7777.
 
-import { renderPlaylist, showWaiting } from './playlist-renderer.js';
+import { showWaiting } from './playlist-renderer.js';
+import { renderLayout } from './layout-engine.js';
 
 const WS_URL = 'ws://localhost:7777';
 
 interface PlaylistItem {
   content_id: string;
   duration_ms: number;
-  asset_path: string;
+  template_type?: string;
+  data?: Record<string, unknown>;
+  asset_path?: string;
+  zone_name?: string;
   weight?: number;
   source?: number;
   sponsored?: boolean;
@@ -33,20 +37,26 @@ function connectToRuntime(): void {
       const msg = JSON.parse(event.data as string) as {
         type: string;
         checksum?: string;
-        items?: unknown[];
+        screen_layout?: string;
+        zones?: Record<string, PlaylistItem[]>;
+        items?: PlaylistItem[];  // legacy fallback
         reason?: string;
         state?: string;
       };
 
       switch (msg.type) {
         case 'PLAYLIST_UPDATE': {
-          const items = (msg.items ?? []) as PlaylistItem[];
-          if (items.length === 0) {
+          const screenLayout = msg.screen_layout ?? 'fullscreen';
+          // zones is the canonical shape; fall back to { main: items } for backward compat
+          const zones: Record<string, PlaylistItem[]> = msg.zones ?? { main: msg.items ?? [] };
+          const container = document.getElementById('content-container');
+          const totalItems = Object.values(zones).reduce((s, a) => s + a.length, 0);
+          if (totalItems === 0) {
             showWaiting();
-          } else {
-            renderPlaylist(items);
+          } else if (container) {
+            renderLayout(container, screenLayout, zones);
           }
-          console.log(`[player-ui] Playlist updated checksum=${msg.checksum ?? 'unknown'} items=${items.length}`);
+          console.log(`[player-ui] Playlist updated checksum=${msg.checksum ?? 'unknown'} layout=${screenLayout} zones=${Object.keys(zones).join(',')}`);
           break;
         }
         case 'EMERGENCY_FREEZE': {
