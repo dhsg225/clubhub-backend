@@ -4,11 +4,10 @@
  *
  * Rendering modes (D-012):
  *   Static asset  — item has asset_path → plays image or video file
- *   Data-driven   — item has template_type (no asset_path) → stub renderer
- *                   Replace stub with production renderer per template type.
+ *   Data-driven   — item has template_type (no asset_path) → card renderer (renderCard)
  */
 
-import { renderTemplateStub } from './template-stubs.js';
+import { renderCard } from './template-stubs.js';
 
 interface PlaylistItem {
   content_id: string;
@@ -63,7 +62,7 @@ function displayItem(item: PlaylistItem): void {
 
   // Data-driven template — route to stub (replace stub with production renderer)
   if (item.template_type && !item.asset_path) {
-    renderTemplateStub(container, item.template_type, item.data ?? {}, item.content_id);
+    renderCard(container, item.template_type, item.data ?? {}, item.content_id);
     return;
   }
 

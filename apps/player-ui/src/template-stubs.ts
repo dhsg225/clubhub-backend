@@ -1,13 +1,13 @@
 /**
- * Stub renderers for each canonical template type.
- * Each stub shows the template name + data fields as a visual placeholder
- * until a production renderer is built for that type.
+ * Card renderers for each canonical template type (D-016 vocabulary).
+ * Each known type has a real visual renderer. Unknown/future types fall back
+ * to a coloured placeholder.
  *
- * Add a new entry to STUB_COLORS + renderTemplateStub's switch when a new
+ * Add a new entry to CARD_FALLBACK_COLORS + renderCard's switch when a new
  * template type is introduced.
  */
 
-const STUB_COLORS: Record<string, string> = {
+const CARD_FALLBACK_COLORS: Record<string, string> = {
   promo_slide:   '#7C3AED', // violet
   event_banner:  '#EA580C', // orange
   sponsor_banner:'#16A34A', // green
@@ -15,7 +15,7 @@ const STUB_COLORS: Record<string, string> = {
   daily_specials:'#DC2626', // red
 };
 
-export function renderTemplateStub(
+export function renderCard(
   container: HTMLElement,
   templateType: string,
   data: Record<string, unknown>,
@@ -236,7 +236,7 @@ export function renderTemplateStub(
     return;
   }
 
-  const bg = STUB_COLORS[templateType] ?? '#4B5563';
+  const bg = CARD_FALLBACK_COLORS[templateType] ?? '#4B5563';
 
   const wrapper = document.createElement('div');
   wrapper.style.cssText = [

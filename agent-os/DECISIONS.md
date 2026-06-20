@@ -236,3 +236,31 @@ All entries below are labelled `Source: codebase inference` unless a human has a
 
 **Source**: Human decision 2026-06-20 — prompted by operator mockup showing zone-based display
 **Status**: Active
+
+---
+
+## D-016 — Canonical rendering vocabulary (Layout / Zone / Card / Widget)
+
+**Decision**: Four terms are used strictly and never interchangeably across code, docs, and agent prompts:
+
+| Term | Definition | Example |
+|---|---|---|
+| **Layout** | The static screen geometry on the Pi display. Defines the CSS grid structure. | `fullscreen`, `split_horizontal`, `news_bar`, `quad` |
+| **Zone** | A named bounding region inside a Layout. Receives a playlist. Acts as a CSS container (`container-type: inline-size`). | `main`, `main_left`, `ticker`, `top_left` |
+| **Card** | A single piece of authored content — a data record (`content` table) with a `template_type` and `data` JSONB. Has a renderer. | `promo_slide`, `event_banner`, `menu_board` |
+| **Widget** | A small programmatic, real-time utility that occupies a zone directly. Not a card. Not scheduled via a playlist. | `Clock`, `DateDisplay`, `Weather`, `TickerScroll` |
+
+**Implications**:
+1. Zone wrappers in player-ui use `container-type: inline-size` so Card renderers reflow via CSS Container Queries — no JavaScript dimension-passing.
+2. Card renderers (`renderCard()` in `template-stubs.ts`) must never assume viewport size. They adapt to their zone container.
+3. Widgets are injected into zones by the layout engine directly — they are never scheduled via the Playlist/Schedule/PRE path.
+4. The ticker zone's content is a Widget (scrolling text engine), not a Card playlist. Its content sources (club news, regional feeds, sponsor text) are separate from the Card authoring flow.
+5. For MVP, the ticker Widget sources only club-authored text strings. Regional news API feeds and sponsor portal integration are future scope.
+6. Do not use "template" as a standalone noun in code or docs. Use `template_type` (the discriminator field) or "Card" (the content entity).
+
+**Rename applied 2026-06-20**:
+- `renderTemplateStub()` → `renderCard()` in `apps/player-ui/src/template-stubs.ts`
+- `STUB_COLORS` → `CARD_FALLBACK_COLORS` in same file
+
+**Source**: Human decision 2026-06-20 — Gemini architecture review + vocabulary audit
+**Status**: Active
