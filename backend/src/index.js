@@ -26,6 +26,7 @@ const resolveRouter        = require('./routes/resolve');
 const otaRouter            = require('./routes/ota');
 const namedPlaylistsRouter = require('./routes/named-playlists');
 const tickerRouter         = require('./routes/ticker');
+const tenantsRouter        = require('./routes/tenants');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -99,6 +100,9 @@ app.use('/named_playlists', serveSpaForBrowser, rateLimit.write, injectTenantCon
 
 // Ticker items (operator-authored scrolling text)
 app.use('/ticker', serveSpaForBrowser, rateLimit.write, injectTenantContext, tickerRouter);
+
+// Tenant admin (BL-036)
+app.use('/tenants', serveSpaForBrowser, rateLimit.write, tenantsRouter);
 
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);
