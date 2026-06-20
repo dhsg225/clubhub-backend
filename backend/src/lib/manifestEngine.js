@@ -154,6 +154,7 @@ async function computeManifest(screenId) {
             s.starts_at, s.ends_at, s.days_of_week,
             s.time_of_day_start, s.time_of_day_end,
             s.is_fallback,
+            s.zone_name,
             c.template_type,
             c.data AS content_data
      FROM   schedules s
@@ -173,6 +174,7 @@ async function computeManifest(screenId) {
             s.starts_at, s.ends_at, s.days_of_week,
             s.time_of_day_start, s.time_of_day_end,
             s.is_fallback,
+            s.zone_name,
             c.template_type,
             c.data AS content_data
      FROM   schedules s
@@ -206,6 +208,7 @@ async function computeManifest(screenId) {
         data:             r.content_data,
         duration:         r.duration,
         priority:         r.priority,
+        zone_name:        r.zone_name ?? 'main',
         source,
       }));
   }
@@ -246,11 +249,19 @@ async function computeManifest(screenId) {
     }];
   }
 
-  // 9. Version: only increment when content actually changes
+  // 9. Group items by zone for zone-aware layout engine
+  const items_by_zone = {};
+  for (const item of items) {
+    const z = item.zone_name ?? 'main';
+    if (!items_by_zone[z]) items_by_zone[z] = [];
+    items_by_zone[z].push(item);
+  }
+
+  // 10. Version: only increment when content actually changes
   // FIX-1: include i.data in the signature — content edits (e.g. headline changes)
   //        now produce a different checksum and trigger a version bump.
   const sig  = items.map(i =>
-    `${i.content_id}:${i.duration}:${i.priority ?? 0}:${JSON.stringify(i.data)}`
+    `${i.content_id}:${i.duration}:${i.priority ?? 0}:${i.zone_name ?? 'main'}:${JSON.stringify(i.data)}`
   ).join('|');
   const csum = checksum(sig);
 
@@ -306,6 +317,7 @@ async function computeManifest(screenId) {
       valid_until:   validUntil.toISOString(),
       generated_at:  new Date().toISOString(), // kept for backward compat
       items,
+      items_by_zone,
       fallback_items: fallbackItems,
     };
 
