@@ -214,6 +214,23 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ---
 
+### BL-028 — Rename screens.layout_template → screens.screen_layout `[S]`
+- **What**: The `layout_template` column on the `screens` table predates D-016 and contradicts the canonical vocabulary (D-016 bans "template" as a standalone noun; the pre-built screen geometry is a **Layout**). Rename it to `screen_layout` via a new migration and update all references.
+- **Acceptance criteria**:
+  1. `backend/db/migrate_011.sql` — `ALTER TABLE screens RENAME COLUMN layout_template TO screen_layout`
+  2. `backend/src/routes/screens.js` — all references to `layout_template` renamed to `screen_layout` (PATCH handler, SQL query, validation error messages)
+  3. `apps/cms-web/src/routes/VenueDashboard.tsx` — `Screen` interface field, mutation payload, and all reads updated to `screen_layout`
+  4. Migration applied to production DB
+  5. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors)
+- **Files**:
+  - `backend/db/migrate_011.sql` (new)
+  - `backend/src/routes/screens.js`
+  - `apps/cms-web/src/routes/VenueDashboard.tsx`
+- **Role**: Feature Development — Agent 3
+- **Status**: TODO
+
+---
+
 ## Future (no scope yet — do not build)
 
 | Item | Description |

@@ -258,9 +258,12 @@ All entries below are labelled `Source: codebase inference` unless a human has a
 5. For MVP, the ticker Widget sources only club-authored text strings. Regional news API feeds and sponsor portal integration are future scope.
 6. Do not use "template" as a standalone noun in code or docs. Use `template_type` (the discriminator field) or "Card" (the content entity).
 
-**Rename applied 2026-06-20**:
+**Renames applied 2026-06-20**:
 - `renderTemplateStub()` → `renderCard()` in `apps/player-ui/src/template-stubs.ts`
 - `STUB_COLORS` → `CARD_FALLBACK_COLORS` in same file
+
+**Pending rename (BL-028)**:
+- `screens.layout_template` → `screens.screen_layout` — column predates D-016. Migration + code update tracked in BL-028.
 
 **Source**: Human decision 2026-06-20 — Gemini architecture review + vocabulary audit
 **Status**: Active
