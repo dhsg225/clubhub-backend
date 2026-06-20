@@ -228,6 +228,20 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-F08 | Image upload + server-side WebP conversion at 1920×1080 — required before any card type uses images in production. |
 | BL-F09 | promo_slide production renderer — promoted to BL-023 (active). |
 
+### BL-024 — Zone support: layout_template on screens + zone_name on schedules `[S]`
+- **What**: Implement D-015. Add the two DB columns that make zone-based layouts possible. Wire `zone_name` into the Schedule Creator UI and update the Screen detail page to show a layout template picker.
+- **Acceptance criteria**:
+  1. `migrate_010.sql`: `ALTER TABLE schedules ADD COLUMN zone_name VARCHAR(40) NOT NULL DEFAULT 'main'`; `ALTER TABLE screens ADD COLUMN layout_template VARCHAR(40) NOT NULL DEFAULT 'fullscreen'`
+  2. `schedules.js` POST accepts `zone_name` (default `'main'`); GET returns it
+  3. `ScheduleCreator.tsx` — add an optional "Zone" select field that appears only when the operator has chosen a layout template that has multiple zones. For now, hardcode the zone options based on a `LAYOUT_ZONES` constant in the component: `{ fullscreen: ['main'], split_horizontal: ['main_left','main_right','ticker'], news_bar: ['main','ticker'], quad: ['top_left','top_right','bottom_left','bottom_right'] }`. Default zone = `'main'`, field only shown when layout has >1 zone.
+  4. `VenueDashboard.tsx` — screen rows gain a "Layout" column showing the `layout_template` value (or "Full Screen" as a readable label). A dropdown in each row allows changing it: `fullscreen | split_horizontal | news_bar | quad`. PATCH `/screens/:id` with `{ layout_template }` on change.
+  5. `backend/src/routes/screens.js` — PATCH /screens/:id accepts `layout_template`; validate it is one of the 4 allowed values.
+  6. Migration applied to production DB.
+  7. `pnpm --filter @clubhub/cms-web typecheck` passes.
+- **Files**: `backend/db/migrate_010.sql` (new), `backend/src/routes/schedules.js`, `backend/src/routes/screens.js`, `apps/cms-web/src/routes/ScheduleCreator.tsx`, `apps/cms-web/src/routes/VenueDashboard.tsx`
+- **Role**: Feature Development — Agent 3
+- **Status**: TODO
+
 ---
 
 ## Completed

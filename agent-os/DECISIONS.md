@@ -203,3 +203,36 @@ All entries below are labelled `Source: codebase inference` unless a human has a
 
 **Source**: Gemini Deep Research 2026-06-19 — operator psychology + failed paradigms analysis
 **Status**: Active
+
+---
+
+## D-015 — Screen layouts are pre-built zone templates; operators pick, not design
+
+**Decision**: Each Pi display has a **layout template** — a fixed CSS grid of named zones. Operators choose from a small set of pre-built layouts; they cannot move, resize, or create zones (free-form canvas is abandoned per D-014). Content scheduling targets a zone within a layout (`zone_name` on the `schedules` table).
+
+**Pre-built layouts (initial set)**:
+- `fullscreen` — one zone (`main`), whole display. Default. What the system has been building so far.
+- `split_horizontal` — two equal zones side by side: `main_left` (text/card) + `main_right` (image/video). Persistent `branding` + `clock` overlay at top. Bottom bar: `ticker` + `weather`.
+- `news_bar` — full-screen `main` zone + a persistent `ticker` strip at the bottom (~10% height).
+- `quad` — four equal zones: `top_left`, `top_right`, `bottom_left`, `bottom_right`. Good for menu boards.
+
+**Zone types**:
+- `main` / `main_left` / `main_right` / `top_*` / `bottom_*` — playlist content rotates here (card duration driven by schedule)
+- `ticker` — scrolling text feed (data-driven, not a card)
+- `clock` — live time + date widget (persistent, no scheduling needed)
+- `weather` — weather widget (persistent)
+- `branding` — venue logo + name (persistent, set per venue)
+
+**What "fullscreen" is**: The current full-screen single-card rotation is exactly `layout: fullscreen, zone: main`. No existing work is invalidated — it is the base case of this model.
+
+**Implication**:
+1. `schedules` table gets a `zone_name VARCHAR(40) DEFAULT 'main'` column (migration BL-024).
+2. `screens` table gets a `layout_template VARCHAR(40) DEFAULT 'fullscreen'` column (migration BL-024).
+3. Corpus items carry a `zone` field (default `'main'`) so the player knows which zone to render into.
+4. Player-UI layout engine renders zones as CSS grid areas; zone content transitions independently.
+5. PRE resolver runs per zone (treats each zone as an independent scheduling context).
+6. CMS: screen detail page lets the operator pick a layout template from a dropdown. No custom zone editor.
+7. New template types (ticker content, weather config) are future items — do not build until layout engine exists.
+
+**Source**: Human decision 2026-06-20 — prompted by operator mockup showing zone-based display
+**Status**: Active
