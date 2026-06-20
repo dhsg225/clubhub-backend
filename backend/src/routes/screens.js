@@ -83,22 +83,22 @@ router.patch('/:id/heartbeat', async (req, res) => {
   }
 });
 
-// PATCH /screens/:id — update screen settings (layout_template, etc.)
+// PATCH /screens/:id — update screen settings (screen_layout, etc.)
 router.patch('/:id', async (req, res) => {
   const ALLOWED_LAYOUTS = ['fullscreen', 'split_horizontal', 'news_bar', 'quad'];
-  const { layout_template } = req.body;
+  const { screen_layout } = req.body;
 
-  if (!layout_template) {
-    return res.status(400).json({ error: 'layout_template required' });
+  if (!screen_layout) {
+    return res.status(400).json({ error: 'screen_layout required' });
   }
-  if (!ALLOWED_LAYOUTS.includes(layout_template)) {
-    return res.status(400).json({ error: `layout_template must be one of: ${ALLOWED_LAYOUTS.join(', ')}` });
+  if (!ALLOWED_LAYOUTS.includes(screen_layout)) {
+    return res.status(400).json({ error: `screen_layout must be one of: ${ALLOWED_LAYOUTS.join(', ')}` });
   }
 
   try {
     const r = await pool.query(
-      'UPDATE screens SET layout_template = $1 WHERE id = $2 RETURNING *',
-      [layout_template, req.params.id]
+      'UPDATE screens SET screen_layout = $1 WHERE id = $2 RETURNING *',
+      [screen_layout, req.params.id]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);

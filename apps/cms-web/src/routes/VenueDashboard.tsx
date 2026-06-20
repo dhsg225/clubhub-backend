@@ -33,7 +33,7 @@ interface Screen {
   assets_required_count: number | null;
   assets_verified_count: number | null;
   content_readiness_state: string | null;
-  layout_template: string | null;
+  screen_layout: string | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -265,15 +265,15 @@ export function Component(): JSX.Element {
     });
 
   const { mutate: patchLayout } = useMutation({
-    mutationFn: ({ screenId, layout_template }: { screenId: string; layout_template: string }) =>
-      api.patch<Screen>(`/screens/${screenId}`, { layout_template }),
+    mutationFn: ({ screenId, screen_layout }: { screenId: string; screen_layout: string }) =>
+      api.patch<Screen>(`/screens/${screenId}`, { screen_layout }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['screens', venueId] }),
     onError: (err, variables) => {
       // Revert optimistic selection
       const screen = screens?.find((s) => s.id === variables.screenId);
       setLayoutSelections((prev) => ({
         ...prev,
-        [variables.screenId]: screen?.layout_template ?? 'fullscreen',
+        [variables.screenId]: screen?.screen_layout ?? 'fullscreen',
       }));
       setLayoutErrors((prev) => ({
         ...prev,
@@ -285,7 +285,7 @@ export function Component(): JSX.Element {
   function handleLayoutChange(screenId: string, value: string): void {
     setLayoutSelections((prev) => ({ ...prev, [screenId]: value }));
     setLayoutErrors((prev) => ({ ...prev, [screenId]: '' }));
-    patchLayout({ screenId, layout_template: value });
+    patchLayout({ screenId, screen_layout: value });
   }
 
   if (venueLoading) {
@@ -389,7 +389,7 @@ export function Component(): JSX.Element {
                   <ScreenRow
                     key={screen.id}
                     screen={screen}
-                    layoutSelection={layoutSelections[screen.id] ?? screen.layout_template ?? 'fullscreen'}
+                    layoutSelection={layoutSelections[screen.id] ?? screen.screen_layout ?? 'fullscreen'}
                     onLayoutChange={handleLayoutChange}
                     layoutError={layoutErrors[screen.id] ?? null}
                   />
