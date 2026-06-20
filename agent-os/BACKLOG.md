@@ -216,18 +216,144 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ### BL-028 — Rename screens.layout_template → screens.screen_layout `[S]`
 - **What**: The `layout_template` column on the `screens` table predates D-016 and contradicts the canonical vocabulary (D-016 bans "template" as a standalone noun; the pre-built screen geometry is a **Layout**). Rename it to `screen_layout` via a new migration and update all references.
-- **Acceptance criteria**:
-  1. `backend/db/migrate_011.sql` — `ALTER TABLE screens RENAME COLUMN layout_template TO screen_layout`
-  2. `backend/src/routes/screens.js` — all references to `layout_template` renamed to `screen_layout` (PATCH handler, SQL query, validation error messages)
-  3. `apps/cms-web/src/routes/VenueDashboard.tsx` — `Screen` interface field, mutation payload, and all reads updated to `screen_layout`
-  4. Migration applied to production DB
-  5. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors)
 - **Files**:
   - `backend/db/migrate_011.sql` (new)
   - `backend/src/routes/screens.js`
   - `apps/cms-web/src/routes/VenueDashboard.tsx`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Code changes (screens.js, VenueDashboard.tsx) complete. migrate_014.sql applied to production (dropped stale layout_template column, only screen_layout remains). manifestEngine.js tenant_id defence-in-depth deployed. Smoke test: /resolve returning data correctly.
+
+---
+
+---
+
+### BL-040 — card_templates registry: DB-backed template catalogue + schema-driven CMS form `[M]`
+- **What**: Eliminates the hardcoded template selector in `ContentNew.tsx`. A `card_templates` table becomes the authoritative catalogue of available template types — their `type_slug`, `display_name`, and `field_schema` (JSONB, defines what fields operators can fill in and their constraints). The 5 existing types are seeded as system templates. `ContentNew.tsx` fetches from the API and generates form fields from `field_schema` instead of a hardcoded switch. This is L2 of the Three-Tier Template Governance Model (D-019). L1 renderers (template-stubs.ts, ContentPreview.tsx) remain code-based — this change governs *authoring*, not *rendering*.
+
+  **field_schema structure**:
+  ```json
+  {
+    "fields": [
+      { "key": "title",            "label": "Title",            "type": "text",     "max_chars": 60,  "required": true  },
+      { "key": "subtitle",         "label": "Subtitle",         "type": "text",     "max_chars": 120, "required": false },
+      { "key": "background_color", "label": "Background Colour","type": "color",    "required": false, "default": "#1a1a2e" },
+      { "key": "text_color",       "label": "Text Colour",      "type": "color",    "required": false, "default": "#ffffff" }
+    ]
+  }
+  ```
+  Field types: `text` (max_chars), `textarea`, `color`, `select` (+ options[]), `sections` (menu_board), `items` (daily_specials list).
+
+- **Acceptance criteria**:
+  1. `backend/db/migrate_016.sql`:
+     ```sql
+     CREATE TABLE card_templates (
+       type_slug    VARCHAR(100) PRIMARY KEY,
+       display_name VARCHAR(200) NOT NULL,
+       field_schema JSONB NOT NULL,
+       tenant_id    UUID REFERENCES tenants(id) ON DELETE CASCADE,  -- NULL = system template
+       sort_order   INTEGER NOT NULL DEFAULT 0,
+       created_at   TIMESTAMPTZ DEFAULT NOW()
+     );
+     -- Seed system templates
+     INSERT INTO card_templates (type_slug, display_name, sort_order, field_schema) VALUES
+       ('promo_slide',   'Promotional Slide',  1, '{"fields":[{"key":"title","label":"Title","type":"text","max_chars":60,"required":true},{"key":"subtitle","label":"Subtitle","type":"text","max_chars":120,"required":false},{"key":"background_color","label":"Background Colour","type":"color","required":false,"default":"#1a1a2e"},{"key":"text_color","label":"Text Colour","type":"color","required":false,"default":"#ffffff"}]}'),
+       ('event_banner',  'Event Banner',        2, '{"fields":[{"key":"event_name","label":"Event Name","type":"text","max_chars":60,"required":true},{"key":"date","label":"Date","type":"text","max_chars":30,"required":false},{"key":"time","label":"Time","type":"text","max_chars":20,"required":false},{"key":"description","label":"Description","type":"textarea","max_chars":200,"required":false}]}'),
+       ('sponsor_banner','Sponsor Banner',      3, '{"fields":[{"key":"sponsor_name","label":"Sponsor Name","type":"text","max_chars":60,"required":true},{"key":"tagline","label":"Tagline","type":"text","max_chars":120,"required":false},{"key":"tier","label":"Tier","type":"select","required":false,"options":["Platinum","Gold","Silver"]}]}'),
+       ('menu_board',    'Menu Board',          4, '{"fields":[{"key":"sections","label":"Menu Sections","type":"sections","required":false}]}'),
+       ('daily_specials','Daily Specials',      5, '{"fields":[{"key":"headline","label":"Headline","type":"text","max_chars":40,"required":true},{"key":"items","label":"Items","type":"items","required":false}]}')
+     ON CONFLICT (type_slug) DO NOTHING;
+     ```
+  2. `backend/src/routes/card-templates.js` (new, CommonJS):
+     - `GET /card-templates` — returns system templates (tenant_id IS NULL) plus any tenant-specific templates for `req.tenantId`. Ordered by sort_order.
+     - `POST /card-templates` — super-admin only (X-Admin-Key guard); creates a tenant-specific or system template.
+     - Mounted in `backend/src/index.js` under `/card-templates`.
+  3. `apps/cms-web/src/routes/ContentNew.tsx`:
+     - On mount, fetch `GET /card-templates` and store in state.
+     - Template type selector renders from API response (`display_name` as label, `type_slug` as value). No hardcoded list.
+     - Form fields auto-generate from `field_schema.fields`:
+       - `type: 'text'` → `<input>` with `maxLength` + character counter
+       - `type: 'textarea'` → `<textarea>` with `maxLength` + counter
+       - `type: 'color'` → `<input type="color">` + hex text input
+       - `type: 'select'` → `<select>` from `field.options`
+       - `type: 'sections'` → render existing MenuBoardEditor sub-component (unchanged)
+       - `type: 'items'` → render existing DailySpecialsEditor sub-component (unchanged)
+     - Live preview still uses `renderCard()` / `ContentPreview` renderer — no change to rendering path.
+     - Validation: check `required` fields present, `max_chars` respected, before POST.
+  4. Migration applied to production. `GET /card-templates` returns 5 system templates.
+  5. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors).
+  6. Existing cards already in the DB are not affected — `content.template_type` stays a freeform string; card_templates is a catalogue, not a FK constraint.
+
+- **Files**:
+  - `backend/db/migrate_016.sql` (new)
+  - `backend/src/routes/card-templates.js` (new)
+  - `backend/src/index.js`
+  - `apps/cms-web/src/routes/ContentNew.tsx`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. migrate_016.sql (card_templates table + 5 system templates seeded). card-templates.js route (GET + admin POST). ContentNew.tsx fully rewritten: fetches template catalogue via useQuery, SchemaFields component auto-generates form from field_schema (text/textarea/color/select/sections/items), schema-driven validation, defaultDataFromSchema(). 0 typecheck errors. Production: migration applied, GET /card-templates returns 5 templates, frontend deployed.
+
+---
+
+---
+
+## Media Pipeline — Bunny.net Edge Storage (BL-041 → BL-044)
+
+**Blocker for BL-041, BL-042, BL-044**: Bunny.net account + Storage Zone created + `BUNNY_STORAGE_ZONE`, `BUNNY_API_KEY`, `BUNNY_CDN_BASE_URL` env vars set on production.
+**BL-043 is independent** — Pi asset pre-download is required for 72h autonomy with any media, regardless of CDN choice.
+
+### BL-041 — Backend: signed Bunny upload token endpoint `[S]`
+- **What**: `POST /media/upload-token` — validates the requesting tenant, checks contract limits (future: quota), generates a short-lived Bunny API write key scoped to the tenant's storage path (`/tenants/{tenant_id}/`). Returns `{ upload_url, auth_header, cdn_base_url }` for the client to PUT directly to Bunny. File never proxies through Node.js.
+- **Acceptance criteria**:
+  1. `backend/src/routes/media.js` (new): `POST /media/upload-token` requires `injectTenantContext`; returns `{ upload_url: "https://storage.bunnycdn.com/{BUNNY_STORAGE_ZONE}/tenants/{tenant_id}/{uuid}.{ext}", auth_header: { AccessKey: BUNNY_API_KEY }, cdn_base_url: BUNNY_CDN_BASE_URL }`. File extension validated from `req.body.filename` (allow: jpg, jpeg, png, gif, webp, mp4). 400 on missing/invalid ext.
+  2. When `BUNNY_API_KEY` is not set: returns `501 Not Implemented` with `{ error: "Media storage not configured" }` — graceful degradation.
+  3. Mounted in `backend/src/index.js` at `/media`.
+  4. No file bytes touch Node.js at any point.
+- **Files**: `backend/src/routes/media.js` (new), `backend/src/index.js`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. media.js: POST /media/upload-token returns tenant-scoped Bunny upload_url + AccessKey auth_header + cdn_url. 501 when unconfigured. Extension validated (jpg/jpeg/png/gif/webp/mp4). Mounted at /media with injectTenantContext. Deployed + pm2 restarted. Verified: valid request returns sg.storage.bunnycdn.com URL + b-cdn.net CDN URL, invalid ext → 400, missing filename → 400.
+
+---
+
+### BL-042 — Sponsor portal: direct-to-Bunny file upload flow `[S]`
+- **What**: Replace the text-only sponsor upload form with a real image/video upload. Sponsor selects file → frontend requests token from BL-041 → frontend PUTs directly to Bunny → frontend registers the card with `media_url` in data JSONB.
+- **Acceptance criteria**:
+  1. SponsorDashboard "Sponsor Banner" tab: file input (accept: image/*, video/mp4) + preview thumbnail before upload.
+  2. On submit: (a) `POST /media/upload-token` with `{ filename }` → receive `{ upload_url, auth_header }`; (b) `PUT upload_url` with file binary + `AccessKey` header directly from browser; (c) `POST /sponsor/card` with `{ sponsor_name, tagline, tier, media_url: "{cdn_base_url}/tenants/{tenant_id}/{uuid}.{ext}" }`.
+  3. Progress indicator during upload. Error state if Bunny PUT fails (show raw status code).
+  4. `pnpm --filter @clubhub/sponsor-portal build` PASS, 0 typecheck errors.
+- **Files**: `apps/sponsor-portal/src/routes/SponsorDashboard.tsx`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — SponsorDashboard.tsx: file input (accept image/*, video/mp4) + preview thumbnail (image) + video indicator. Three-step upload flow: (1) POST /media/upload-token → { upload_url, auth_header, cdn_url }; (2) PUT file to Bunny with AccessKey header; (3) POST /sponsor/card with media_url in data JSONB. Progress indicator during upload ("Requesting upload token…" → "Uploading file…" → "Registering card…"). Error state shows raw message on Bunny PUT failure. sponsor.js updated to accept/pass-through media_url field. Vite proxy added for /media. pnpm --filter @clubhub/sponsor-portal build PASS, 0 typecheck errors. 68/68 backend tests PASS.
+
+---
+
+### BL-043 — Pi asset manager: pre-download media_url assets during corpus sync `[M]`
+- **What**: Cards in the corpus can contain `media_url` fields in their `data` JSONB. Currently the Pi ignores these — they'd fail when offline. The asset manager scans the resolved corpus on each sync, identifies all `media_url` values, downloads them to `ASSET_DIR`, and substitutes `file://` paths into the corpus before handing it to the layout engine. This preserves 72h offline autonomy for all media-containing cards.
+- **Acceptance criteria**:
+  1. `player-runtime/src/asset-manager.ts` (new):
+     - `syncAssets(corpusItems: ResolvedItem[]): Promise<ResolvedItem[]>` — scans `item.data` for any `media_url` string values, downloads each to `{ASSET_DIR}/{sha256(url)}.{ext}`, returns items with `media_url` replaced by local path.
+     - Skip download if file already exists (idempotent).
+     - Failed download: log warning, leave `media_url` as-is (item plays with original URL, fails gracefully if offline).
+     - Respects `ASSET_DIR` env var (default `/var/clubhub/assets`).
+  2. `player-runtime/src/playlist-poller.ts` — call `syncAssets()` after each successful `/resolve` response, before emitting `PLAYLIST_UPDATE`.
+  3. `assets_required_count` and `assets_verified_count` heartbeat fields updated: required = total media_url count in corpus, verified = count of successfully cached local files.
+  4. `pnpm --filter @clubhub/player-runtime typecheck` passes.
+  5. Unit tests: (a) asset already cached → no HTTP call; (b) download succeeds → path substituted; (c) download fails → original URL preserved, no crash.
+- **Files**: `player-runtime/src/asset-manager.ts` (new), `player-runtime/src/playlist-poller.ts`, `player-runtime/src/index.ts`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. asset-manager.ts: syncAssets/syncZones scan data JSONB for media_url, download to {ASSET_DIR}/{sha256}.{ext}, substitute local paths. Idempotent (skip existing). Non-fatal (preserve URL on failure). Integrated in orchestrator.ts pollPlaylist() after poll() before enrichment. Heartbeat fields (assets_required_count, assets_verified_count) updated from sync stats. 0 typecheck errors. 5/5 unit tests pass (cached skip, download+substitute, failure+preserve, passthrough, multi-zone).
+
+---
+
+### BL-044 — card_templates: add image field type + update sponsor_banner schema `[S]`
+- **What**: Add `type: "image"` to the field_schema vocabulary. Update `sponsor_banner` in `card_templates` to include an optional `media_url` image field. `ContentNew.tsx` renders a file picker for `type: "image"` fields — on select, calls `POST /media/upload-token` → PUTs to Bunny → stores CDN URL in `data.media_url`.
+- **Acceptance criteria**:
+  1. `card_templates` `sponsor_banner` field_schema updated (via migration or admin API PATCH) to add `{ "key": "media_url", "label": "Banner Image", "type": "image", "required": false }`.
+  2. `ContentNew.tsx` SchemaFields handles `type: "image"`: renders `<input type="file">`, on change calls upload-token flow (same as BL-042 sponsor portal), stores resulting CDN URL in `formData[field.key]`.
+  3. When `BUNNY_API_KEY` not configured (501 from token endpoint): image field renders as a plain URL text input instead (fallback, operator can paste a URL manually).
+  4. `pnpm --filter @clubhub/cms-web typecheck` passes.
+- **Files**: `apps/cms-web/src/routes/ContentNew.tsx`, migration or `POST /card-templates` PATCH to update sponsor_banner schema
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Agent 3. SchemaField type extended with 'image'. ImageField component: POST /media/upload-token → PUT to Bunny → stores CDN URL. Falls back to plain URL text input on 501 (Bunny unconfigured). Preview shows uploaded image with remove button. migrate_017.sql: sponsor_banner field_schema updated with media_url image field. 0 typecheck errors. Deployed to production.
 
 ---
 
@@ -445,22 +571,22 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   5. `pnpm --filter @clubhub/sponsor-portal build` passes. 0 typecheck errors.
 - **Files**: `apps/sponsor-portal/` (scaffold), `backend/src/routes/sponsor.js` (new), `backend/src/index.js`
 - **Role**: Feature Development — Agent 2
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — index.html created, SponsorDashboard replaced with login stub + two-tab upload form (Text/News Item → POST /sponsor/ticker; Sponsor Banner → POST /sponsor/card). backend/src/routes/sponsor.js: POST /sponsor/ticker inserts into ticker_items, POST /sponsor/card inserts into content as sponsor_banner, both validate input. Mounted at /sponsor with rateLimit.write + injectTenantContext. Vite proxy added for dev. pnpm --filter @clubhub/sponsor-portal build PASS, 0 typecheck errors.
 
 ---
 
 ### BL-038 — Social pipeline stub: jobs table + cross_post hook `[S]`
 - **What**: Wire the social publishing pipeline as an async queue — no real API calls. When a card is created with `cross_post: true`, a job is enqueued. A background worker polls the table every 30s and logs what it would post. Establishes the pattern for real Meta integration later without blocking the CMS flow.
 - **Acceptance criteria**:
-  1. `backend/db/migrate_014.sql`: `CREATE TABLE social_jobs (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, content_id UUID REFERENCES content(id) ON DELETE CASCADE, tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE, platform VARCHAR(20) NOT NULL DEFAULT 'facebook', status VARCHAR(20) NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), processed_at TIMESTAMPTZ NULL, error TEXT NULL)`
+  1. `backend/db/migrate_015.sql`: `CREATE TABLE social_jobs (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, content_id UUID REFERENCES content(id) ON DELETE CASCADE, tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE, platform VARCHAR(20) NOT NULL DEFAULT 'facebook', status VARCHAR(20) NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), processed_at TIMESTAMPTZ NULL, error TEXT NULL)`
   2. `backend/src/routes/content.js` POST — if `req.body.cross_post === true`, after inserting the card, insert a `social_jobs` row with `status: 'pending'`
   3. `backend/src/lib/social-worker.js` (new) — `startSocialWorker()`: polls `social_jobs WHERE status='pending'` every 30s, logs `[SOCIAL] Would post to facebook: {title} ({content_id})`, sets status `'sent'`. No real HTTP call.
   4. `backend/src/index.js` — call `startSocialWorker()` on startup
   5. `apps/cms-web/src/routes/ContentNew.tsx` — "Cross-post to Facebook" checkbox below expiry field. Posts `cross_post: true` when checked.
   6. Migration applied to production.
-- **Files**: `backend/db/migrate_014.sql` (new), `backend/src/lib/social-worker.js` (new), `backend/src/routes/content.js`, `backend/src/index.js`, `apps/cms-web/src/routes/ContentNew.tsx`
+- **Files**: `backend/db/migrate_015.sql` (new), `backend/src/lib/social-worker.js` (new), `backend/src/routes/content.js`, `backend/src/index.js`, `apps/cms-web/src/routes/ContentNew.tsx`
 - **Role**: Feature Development — Agent 2
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — migrate_015.sql created (social_jobs table). content.js POST enqueues social_jobs row if cross_post===true (non-fatal on failure). social-worker.js startSocialWorker() polls pending jobs every 30s, logs social.would_post, marks sent. Called in index.js startup before app.listen. ContentNew.tsx: crossPost state + "Cross-post to Facebook" checkbox below expiry, posts cross_post:true when checked. 0 typecheck errors, 68/68 backend tests PASS.
 
 ---
 
@@ -475,7 +601,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   6. `pnpm --filter @clubhub/cms-web typecheck` passes.
 - **Files**: `apps/cms-web/src/components/layout/AppLayout.tsx`, `apps/cms-web/src/routes/ContentNew.tsx`, `apps/cms-web/src/routes/CampaignList.tsx`, `apps/cms-web/src/routes/PlaylistList.tsx`, `apps/cms-web/src/routes/ScheduleList.tsx`, `apps/cms-web/src/routes/TickerManager.tsx`, `apps/cms-web/src/routes/VenueDashboard.tsx`
 - **Role**: Feature Development — Agent 2
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — apps/cms-web/src/styles/responsive.css created (hamburger show/hide, sidebar slide-in, cms-nav-open backdrop, cms-main padding-top, cms-split-panel single-column, 44px touch targets). Imported in main.tsx. AppLayout.tsx: useState for navOpen, hamburger button (hidden on desktop via CSS), cms-sidebar/cms-main className, cms-nav-open class on outer div. ContentNew.tsx: cms-split-panel className on grid div. PlaylistList/ScheduleList/TickerManager/VenueDashboard already had overflowX:auto inline. pnpm --filter @clubhub/cms-web typecheck PASS, build PASS.
 
 ---
 

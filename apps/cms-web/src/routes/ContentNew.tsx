@@ -2,41 +2,48 @@
  * Card Authoring Form — create a new content card.
  * Route: /content/new
  *
- * Split-panel layout:
- *   LEFT  — form: template selector, field set, expiry, save
- *   RIGHT — live 16:9 preview that mirrors form state in real time
+ * BL-040 / D-019 L2+L3: Template catalogue is API-driven.
+ * Form fields are auto-generated from field_schema fetched via GET /card-templates.
+ * Complex field types (sections, items) delegate to dedicated sub-components.
  *
  * POSTs to POST /content with { template_type, data, expires_at }.
- * expires_at is a top-level field (dedicated TIMESTAMPTZ column, not inside data JSONB).
- *
- * D-013: Card → Playlist → Schedule → Screen content hierarchy.
- * D-014: Form-based, brand-locked, expiry required.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api-client.js';
 
 /* ================================================================== *
- * Template types and field schemas
+ * Types for the card_templates API (L2 catalogue)
  * ================================================================== */
 
-type TemplateType =
-  | 'promo_slide'
-  | 'event_banner'
-  | 'sponsor_banner'
-  | 'menu_board'
-  | 'daily_specials';
+interface SchemaField {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'color' | 'select' | 'sections' | 'items' | 'image';
+  max_chars?: number;
+  required?: boolean;
+  default?: string;
+  options?: string[];
+}
 
-const TEMPLATE_OPTIONS: { value: TemplateType; label: string }[] = [
-  { value: 'promo_slide',    label: 'Promo Slide' },
-  { value: 'event_banner',   label: 'Event Banner' },
-  { value: 'sponsor_banner', label: 'Sponsor Banner' },
-  { value: 'menu_board',     label: 'Menu Board' },
-  { value: 'daily_specials', label: 'Daily Specials' },
-];
+interface CardTemplate {
+  type_slug: string;
+  display_name: string;
+  field_schema: { fields: SchemaField[] };
+  sort_order: number;
+}
 
-const STUB_COLORS: Record<TemplateType, string> = {
+/* ================================================================== *
+ * Sub-component types for complex fields
+ * ================================================================== */
+
+interface MenuItem { name: string; price: string; }
+interface MenuSection { section_title: string; items: MenuItem[]; }
+
+interface SpecialItem { dish_name: string; price: string; }
+
+const STUB_COLORS: Record<string, string> = {
   promo_slide:    '#7C3AED',
   event_banner:   '#EA580C',
   sponsor_banner: '#16A34A',
@@ -44,62 +51,96 @@ const STUB_COLORS: Record<TemplateType, string> = {
   daily_specials: '#DC2626',
 };
 
-/* ------------------------------------------------------------------ *
- * Per-template data shapes
- * ------------------------------------------------------------------ */
+/* ================================================================== *
+ * Derive default form data from field_schema
+ * ================================================================== */
 
-interface PromoSlideData {
-  title: string;
-  subtitle: string;
-  background_color: string;
-  text_color: string;
-}
-
-interface EventBannerData {
-  event_name: string;
-  date: string;
-  time: string;
-  description: string;
-}
-
-type SponsorTier = 'Platinum' | 'Gold' | 'Silver';
-interface SponsorBannerData {
-  sponsor_name: string;
-  tagline: string;
-  tier: SponsorTier;
-}
-
-interface MenuItem { name: string; price: string; }
-interface MenuSection { section_title: string; items: MenuItem[]; }
-interface MenuBoardData { sections: MenuSection[]; }
-
-interface SpecialItem { dish_name: string; price: string; }
-interface DailySpecialsData { headline: string; items: SpecialItem[]; }
-
-type TemplateData =
-  | PromoSlideData
-  | EventBannerData
-  | SponsorBannerData
-  | MenuBoardData
-  | DailySpecialsData;
-
-/* ------------------------------------------------------------------ *
- * Default form data per template
- * ------------------------------------------------------------------ */
-
-function defaultData(type: TemplateType): TemplateData {
-  switch (type) {
-    case 'promo_slide':
-      return { title: '', subtitle: '', background_color: '#1a1a2e', text_color: '#ffffff' };
-    case 'event_banner':
-      return { event_name: '', date: '', time: '', description: '' };
-    case 'sponsor_banner':
-      return { sponsor_name: '', tagline: '', tier: 'Gold' };
-    case 'menu_board':
-      return { sections: [{ section_title: '', items: [{ name: '', price: '' }] }] };
-    case 'daily_specials':
-      return { headline: '', items: [{ dish_name: '', price: '' }] };
+function defaultDataFromSchema(fields: SchemaField[]): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const field of fields) {
+    switch (field.type) {
+      case 'text':
+      case 'textarea':
+        data[field.key] = field.default ?? '';
+        break;
+      case 'color':
+        data[field.key] = field.default ?? '#1a1a2e';
+        break;
+      case 'select':
+        data[field.key] = field.default ?? field.options?.[0] ?? '';
+        break;
+      case 'sections':
+        data[field.key] = [{ section_title: '', items: [{ name: '', price: '' }] }];
+        break;
+      case 'items':
+        data[field.key] = [{ dish_name: '', price: '' }];
+        break;
+      case 'image':
+        data[field.key] = '';
+        break;
+    }
   }
+  return data;
+}
+
+/* ================================================================== *
+ * Schema-driven validation
+ * ================================================================== */
+
+function validateFromSchema(
+  fields: SchemaField[],
+  data: Record<string, unknown>,
+  expiresAt: string,
+  noExpiry: boolean,
+): string | null {
+  if (!noExpiry && !expiresAt) {
+    return 'Expiry date is required. Check "No expiry" if this card runs indefinitely.';
+  }
+
+  for (const field of fields) {
+    const val = data[field.key];
+
+    if (field.type === 'text' || field.type === 'textarea') {
+      const str = (val as string) ?? '';
+      if (field.required && !str.trim()) return `${field.label} is required.`;
+      if (field.max_chars && str.length > field.max_chars) {
+        return `${field.label} exceeds ${field.max_chars} characters.`;
+      }
+    }
+
+    if (field.type === 'select' && field.required && !val) {
+      return `${field.label} is required.`;
+    }
+
+    if (field.type === 'image' && field.required && !(val as string)?.trim()) {
+      return `${field.label} is required.`;
+    }
+
+    // sections and items have their own internal constraints checked by sub-components
+    if (field.type === 'sections') {
+      const sections = val as MenuSection[] | undefined;
+      if (sections) {
+        for (const s of sections) {
+          if (s.section_title.length > 30) return 'Section title exceeds 30 characters.';
+          for (const item of s.items) {
+            if (item.name.length > 30) return 'Menu item name exceeds 30 characters.';
+            if (item.price.length > 10) return 'Menu item price exceeds 10 characters.';
+          }
+        }
+      }
+    }
+    if (field.type === 'items') {
+      const items = val as SpecialItem[] | undefined;
+      if (items) {
+        for (const item of items) {
+          if (item.dish_name.length > 30) return 'Dish name exceeds 30 characters.';
+          if (item.price.length > 10) return 'Price exceeds 10 characters.';
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 /* ================================================================== *
@@ -170,117 +211,318 @@ function FieldGroup({ children }: { children: React.ReactNode }): JSX.Element {
 }
 
 /* ================================================================== *
- * Template-specific field sets
+ * Image upload field (BL-044)
+ *
+ * On file select:
+ *   1. POST /media/upload-token → { upload_url, auth_header, cdn_url }
+ *   2. PUT file directly to Bunny via upload_url + AccessKey header
+ *   3. Store cdn_url in formData[field.key]
+ *
+ * Fallback: if upload-token returns 501 (Bunny not configured),
+ * renders a plain URL text input so operator can paste a URL manually.
  * ================================================================== */
 
-function PromoSlideFields({
-  data, onChange,
+function ImageField({
+  value,
+  onChange,
+  label,
+  required,
 }: {
-  data: PromoSlideData;
-  onChange: (d: PromoSlideData) => void;
+  value: string;
+  onChange: (url: string) => void;
+  label: string;
+  required?: boolean | undefined;
 }): JSX.Element {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [fallbackMode, setFallbackMode] = useState(false);
+
+  async function handleFileSelect(file: File): Promise<void> {
+    setError('');
+    setUploading(true);
+
+    try {
+      // Step 1: get upload token
+      const tokenRes = await api.post<{
+        upload_url: string;
+        auth_header: { AccessKey: string };
+        cdn_url: string;
+      }>('/media/upload-token', { filename: file.name });
+
+      // Step 2: PUT directly to Bunny
+      const putRes = await fetch(tokenRes.upload_url, {
+        method: 'PUT',
+        headers: {
+          'AccessKey': tokenRes.auth_header.AccessKey,
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file,
+      });
+
+      if (!putRes.ok) {
+        throw new Error(`Upload failed: HTTP ${putRes.status}`);
+      }
+
+      // Step 3: store CDN URL
+      onChange(tokenRes.cdn_url);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('501') || msg.includes('Not Implemented') || msg.includes('not configured')) {
+        setFallbackMode(true);
+        setError('Media storage not configured — paste a URL instead.');
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Fallback mode: plain URL text input
+  if (fallbackMode) {
+    return (
+      <FieldGroup>
+        <FieldLabel>{label}{required ? '' : ' (optional)'}</FieldLabel>
+        <input
+          type="url"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="https://example.com/image.jpg"
+          style={inputStyle}
+        />
+        <span style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.15rem', display: 'block' }}>
+          Media storage not configured — enter image URL manually
+        </span>
+      </FieldGroup>
+    );
+  }
+
   return (
-    <>
-      <FieldGroup>
-        <FieldLabel>Title</FieldLabel>
-        <TextField value={data.title} onChange={(v) => onChange({ ...data, title: v })} maxLength={45} placeholder="Main headline" />
-      </FieldGroup>
-      <FieldGroup>
-        <FieldLabel>Subtitle</FieldLabel>
-        <TextField value={data.subtitle} onChange={(v) => onChange({ ...data, subtitle: v })} maxLength={80} placeholder="Supporting text" multiline />
-      </FieldGroup>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-        <div>
-          <FieldLabel>Background colour</FieldLabel>
-          <input type="color" value={data.background_color}
-            onChange={(e) => onChange({ ...data, background_color: e.target.value })}
-            style={{ width: '100%', height: '2.25rem', border: '1px solid #d1d5db', borderRadius: '5px', cursor: 'pointer' }} />
-          <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{data.background_color}</span>
+    <FieldGroup>
+      <FieldLabel>{label}{required ? '' : ' (optional)'}</FieldLabel>
+
+      {/* Current image preview */}
+      {value && (
+        <div style={{ marginBottom: '0.5rem', position: 'relative' }}>
+          <img
+            src={value}
+            alt="Uploaded"
+            style={{
+              maxWidth: '100%', maxHeight: '120px', borderRadius: '4px',
+              border: '1px solid #e5e7eb', objectFit: 'contain',
+              backgroundColor: '#f9fafb',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            style={{
+              position: 'absolute', top: '4px', right: '4px',
+              padding: '0.15rem 0.4rem', fontSize: '0.7rem', fontWeight: 600,
+              color: '#991b1b', backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer',
+            }}
+          >✕</button>
         </div>
-        <div>
-          <FieldLabel>Text colour</FieldLabel>
-          <input type="color" value={data.text_color}
-            onChange={(e) => onChange({ ...data, text_color: e.target.value })}
-            style={{ width: '100%', height: '2.25rem', border: '1px solid #d1d5db', borderRadius: '5px', cursor: 'pointer' }} />
-          <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{data.text_color}</span>
+      )}
+
+      {/* File input */}
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,video/mp4"
+        disabled={uploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleFileSelect(file);
+        }}
+        style={{
+          fontSize: '0.8rem', color: '#374151',
+          opacity: uploading ? 0.5 : 1,
+        }}
+      />
+
+      {uploading && (
+        <div style={{ fontSize: '0.78rem', color: '#1d4ed8', marginTop: '0.25rem' }}>
+          Uploading…
         </div>
-      </div>
-    </>
+      )}
+
+      {error && (
+        <div style={{ fontSize: '0.78rem', color: '#991b1b', marginTop: '0.25rem' }}>
+          {error}
+        </div>
+      )}
+    </FieldGroup>
   );
 }
 
-function EventBannerFields({
-  data, onChange,
+/* ================================================================== *
+ * Schema-driven field renderer
+ * Renders each field from field_schema.fields based on its type.
+ * Delegates 'sections' and 'items' to dedicated sub-components.
+ * ================================================================== */
+
+function SchemaFields({
+  fields,
+  data,
+  onChange,
 }: {
-  data: EventBannerData;
-  onChange: (d: EventBannerData) => void;
+  fields: SchemaField[];
+  data: Record<string, unknown>;
+  onChange: (d: Record<string, unknown>) => void;
 }): JSX.Element {
-  return (
-    <>
-      <FieldGroup>
-        <FieldLabel>Event name</FieldLabel>
-        <TextField value={data.event_name} onChange={(v) => onChange({ ...data, event_name: v })} maxLength={50} placeholder="e.g. Trivia Night" />
-      </FieldGroup>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-        <div>
-          <FieldLabel>Date</FieldLabel>
-          <input type="date" value={data.date} onChange={(e) => onChange({ ...data, date: e.target.value })}
-            style={inputStyle} />
-        </div>
-        <div>
-          <FieldLabel>Time</FieldLabel>
-          <input type="time" value={data.time} onChange={(e) => onChange({ ...data, time: e.target.value })}
-            style={inputStyle} />
-        </div>
-      </div>
-      <FieldGroup>
-        <FieldLabel>Description</FieldLabel>
-        <TextField value={data.description} onChange={(v) => onChange({ ...data, description: v })} maxLength={120} placeholder="Additional details" multiline />
-      </FieldGroup>
-    </>
-  );
+  function updateField(key: string, value: unknown): void {
+    onChange({ ...data, [key]: value });
+  }
+
+  // Group consecutive color fields for side-by-side rendering
+  const rendered: JSX.Element[] = [];
+  let i = 0;
+  while (i < fields.length) {
+    const field = fields[i]!;
+
+    // Check if this is a color field followed by another color field → render side by side
+    const nextField = i + 1 < fields.length ? fields[i + 1] : undefined;
+    if (field.type === 'color' && nextField && nextField.type === 'color') {
+      const next = nextField;
+      rendered.push(
+        <div key={`${field.key}-${next.key}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div>
+            <FieldLabel>{field.label}</FieldLabel>
+            <input type="color" value={(data[field.key] as string) ?? field.default ?? '#000000'}
+              onChange={(e) => updateField(field.key, e.target.value)}
+              style={{ width: '100%', height: '2.25rem', border: '1px solid #d1d5db', borderRadius: '5px', cursor: 'pointer' }} />
+            <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{(data[field.key] as string) ?? ''}</span>
+          </div>
+          <div>
+            <FieldLabel>{next.label}</FieldLabel>
+            <input type="color" value={(data[next.key] as string) ?? next.default ?? '#000000'}
+              onChange={(e) => updateField(next.key, e.target.value)}
+              style={{ width: '100%', height: '2.25rem', border: '1px solid #d1d5db', borderRadius: '5px', cursor: 'pointer' }} />
+            <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{(data[next.key] as string) ?? ''}</span>
+          </div>
+        </div>,
+      );
+      i += 2;
+      continue;
+    }
+
+    switch (field.type) {
+      case 'text':
+        rendered.push(
+          <FieldGroup key={field.key}>
+            <FieldLabel>{field.label}{field.required ? '' : ' (optional)'}</FieldLabel>
+            <TextField
+              value={(data[field.key] as string) ?? ''}
+              onChange={(v) => updateField(field.key, v)}
+              maxLength={field.max_chars ?? 100}
+              placeholder={field.label}
+            />
+          </FieldGroup>,
+        );
+        break;
+
+      case 'textarea':
+        rendered.push(
+          <FieldGroup key={field.key}>
+            <FieldLabel>{field.label}{field.required ? '' : ' (optional)'}</FieldLabel>
+            <TextField
+              value={(data[field.key] as string) ?? ''}
+              onChange={(v) => updateField(field.key, v)}
+              maxLength={field.max_chars ?? 500}
+              placeholder={field.label}
+              multiline
+            />
+          </FieldGroup>,
+        );
+        break;
+
+      case 'color':
+        rendered.push(
+          <FieldGroup key={field.key}>
+            <FieldLabel>{field.label}</FieldLabel>
+            <input type="color" value={(data[field.key] as string) ?? field.default ?? '#000000'}
+              onChange={(e) => updateField(field.key, e.target.value)}
+              style={{ width: '100%', height: '2.25rem', border: '1px solid #d1d5db', borderRadius: '5px', cursor: 'pointer' }} />
+            <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{(data[field.key] as string) ?? ''}</span>
+          </FieldGroup>,
+        );
+        break;
+
+      case 'select':
+        rendered.push(
+          <FieldGroup key={field.key}>
+            <FieldLabel>{field.label}</FieldLabel>
+            <select
+              value={(data[field.key] as string) ?? field.options?.[0] ?? ''}
+              onChange={(e) => updateField(field.key, e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              {(field.options ?? []).map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </FieldGroup>,
+        );
+        break;
+
+      case 'sections':
+        rendered.push(
+          <MenuBoardFields
+            key={field.key}
+            data={{ sections: (data[field.key] as MenuSection[]) ?? [{ section_title: '', items: [{ name: '', price: '' }] }] }}
+            onChange={(d) => updateField(field.key, d.sections)}
+          />,
+        );
+        break;
+
+      case 'image':
+        rendered.push(
+          <ImageField
+            key={field.key}
+            value={(data[field.key] as string) ?? ''}
+            onChange={(url) => updateField(field.key, url)}
+            label={field.label}
+            required={field.required}
+          />,
+        );
+        break;
+
+      case 'items':
+        rendered.push(
+          <DailySpecialsFields
+            key={field.key}
+            data={{
+              headline: (data['headline'] as string) ?? '',
+              items: (data[field.key] as SpecialItem[]) ?? [{ dish_name: '', price: '' }],
+            }}
+            onChange={(d) => {
+              onChange({ ...data, headline: d.headline, [field.key]: d.items });
+            }}
+          />,
+        );
+        break;
+    }
+    i++;
+  }
+
+  return <>{rendered}</>;
 }
 
-function SponsorBannerFields({
-  data, onChange,
-}: {
-  data: SponsorBannerData;
-  onChange: (d: SponsorBannerData) => void;
-}): JSX.Element {
-  return (
-    <>
-      <FieldGroup>
-        <FieldLabel>Sponsor name</FieldLabel>
-        <TextField value={data.sponsor_name} onChange={(v) => onChange({ ...data, sponsor_name: v })} maxLength={40} placeholder="e.g. Acme Corp" />
-      </FieldGroup>
-      <FieldGroup>
-        <FieldLabel>Tagline</FieldLabel>
-        <TextField value={data.tagline} onChange={(v) => onChange({ ...data, tagline: v })} maxLength={80} placeholder="e.g. Proud sponsor of live sport" />
-      </FieldGroup>
-      <FieldGroup>
-        <FieldLabel>Tier</FieldLabel>
-        <select value={data.tier} onChange={(e) => onChange({ ...data, tier: e.target.value as SponsorTier })}
-          style={{ ...inputStyle, cursor: 'pointer' }}>
-          <option value="Platinum">Platinum</option>
-          <option value="Gold">Gold</option>
-          <option value="Silver">Silver</option>
-        </select>
-      </FieldGroup>
-    </>
-  );
-}
+/* ================================================================== *
+ * Complex sub-components (sections / items)
+ * ================================================================== */
 
 function MenuBoardFields({
   data, onChange,
 }: {
-  data: MenuBoardData;
-  onChange: (d: MenuBoardData) => void;
+  data: { sections: MenuSection[] };
+  onChange: (d: { sections: MenuSection[] }) => void;
 }): JSX.Element {
   function updateSection(si: number, section: MenuSection): void {
     const sections = data.sections.map((s, i) => (i === si ? section : s));
     onChange({ sections });
   }
-
   function updateItem(si: number, ii: number, item: MenuItem): void {
     const sections = data.sections.map((s, i) => {
       if (i !== si) return s;
@@ -288,16 +530,13 @@ function MenuBoardFields({
     });
     onChange({ sections });
   }
-
   function addSection(): void {
     if (data.sections.length >= 2) return;
     onChange({ sections: [...data.sections, { section_title: '', items: [{ name: '', price: '' }] }] });
   }
-
   function removeSection(si: number): void {
     onChange({ sections: data.sections.filter((_, i) => i !== si) });
   }
-
   function addItem(si: number): void {
     if ((data.sections[si]?.items.length ?? 0) >= 4) return;
     const sections = data.sections.map((s, i) =>
@@ -305,7 +544,6 @@ function MenuBoardFields({
     );
     onChange({ sections });
   }
-
   function removeItem(si: number, ii: number): void {
     const sections = data.sections.map((s, i) =>
       i === si ? { ...s, items: s.items.filter((_, j) => j !== ii) } : s,
@@ -363,18 +601,16 @@ function MenuBoardFields({
 function DailySpecialsFields({
   data, onChange,
 }: {
-  data: DailySpecialsData;
-  onChange: (d: DailySpecialsData) => void;
+  data: { headline: string; items: SpecialItem[] };
+  onChange: (d: { headline: string; items: SpecialItem[] }) => void;
 }): JSX.Element {
   function updateItem(i: number, item: SpecialItem): void {
     onChange({ ...data, items: data.items.map((it, j) => (j === i ? item : it)) });
   }
-
   function addItem(): void {
     if (data.items.length >= 5) return;
     onChange({ ...data, items: [...data.items, { dish_name: '', price: '' }] });
   }
-
   function removeItem(i: number): void {
     onChange({ ...data, items: data.items.filter((_, j) => j !== i) });
   }
@@ -410,134 +646,51 @@ function DailySpecialsFields({
 }
 
 /* ================================================================== *
- * Live preview panel — renders form state in 16:9 stub
- * Same colour scheme as ContentPreview.tsx / TemplateStub
+ * Live preview panel
  * ================================================================== */
 
-function derivePreviewTitle(type: TemplateType, data: TemplateData): string {
-  switch (type) {
-    case 'promo_slide': {
-      const d = data as PromoSlideData;
-      return d.title || 'Promo Slide';
-    }
-    case 'event_banner': {
-      const d = data as EventBannerData;
-      return d.event_name || 'Event Banner';
-    }
-    case 'sponsor_banner': {
-      const d = data as SponsorBannerData;
-      return d.sponsor_name || 'Sponsor Banner';
-    }
-    case 'menu_board':
-      return 'Menu Board';
-    case 'daily_specials': {
-      const d = data as DailySpecialsData;
-      return d.headline || 'Daily Specials';
-    }
-  }
-}
+function LivePreview({ type, data }: { type: string; data: Record<string, unknown> }): JSX.Element {
+  // Derive title: try common field names
+  const title = (data['title'] as string)
+    || (data['event_name'] as string)
+    || (data['sponsor_name'] as string)
+    || (data['headline'] as string)
+    || type.replace(/_/g, ' ');
 
-function derivePreviewBg(type: TemplateType, data: TemplateData): string {
-  if (type === 'promo_slide') {
-    return (data as PromoSlideData).background_color || STUB_COLORS[type];
-  }
-  return STUB_COLORS[type];
-}
+  const bg = (data['background_color'] as string) || STUB_COLORS[type] || '#374151';
+  const textColor = (data['text_color'] as string) || '#ffffff';
 
-function derivePreviewTextColor(type: TemplateType, data: TemplateData): string {
-  if (type === 'promo_slide') return (data as PromoSlideData).text_color || '#ffffff';
-  return '#ffffff';
-}
-
-function previewEntries(type: TemplateType, data: TemplateData): [string, string][] {
-  switch (type) {
-    case 'promo_slide': {
-      const d = data as PromoSlideData;
-      return [
-        ['subtitle', d.subtitle],
-        ['bg', d.background_color],
-        ['text', d.text_color],
-      ].filter(([, v]) => v) as [string, string][];
-    }
-    case 'event_banner': {
-      const d = data as EventBannerData;
-      return [
-        ['date', d.date],
-        ['time', d.time],
-        ['description', d.description],
-      ].filter(([, v]) => v) as [string, string][];
-    }
-    case 'sponsor_banner': {
-      const d = data as SponsorBannerData;
-      return [
-        ['tagline', d.tagline],
-        ['tier', d.tier],
-      ].filter(([, v]) => v) as [string, string][];
-    }
-    case 'menu_board': {
-      const d = data as MenuBoardData;
-      const entries: [string, string][] = [];
-      for (const s of d.sections) {
-        if (s.section_title) entries.push([s.section_title, s.items.filter(i => i.name).map(i => `${i.name}${i.price ? ' ' + i.price : ''}`).join(', ')]);
-      }
-      return entries;
-    }
-    case 'daily_specials': {
-      const d = data as DailySpecialsData;
-      return d.items
-        .filter(i => i.dish_name)
-        .map(i => [i.dish_name, i.price] as [string, string]);
-    }
-  }
-}
-
-function LivePreview({ type, data }: { type: TemplateType; data: TemplateData }): JSX.Element {
-  const bg = derivePreviewBg(type, data);
-  const textColor = derivePreviewTextColor(type, data);
-  const title = derivePreviewTitle(type, data);
-  const entries = previewEntries(type, data);
+  // Collect non-empty string entries for preview (skip color/complex fields)
+  const entries: [string, string][] = Object.entries(data)
+    .filter(([k, v]) =>
+      typeof v === 'string' && v.trim() !== ''
+      && k !== 'title' && k !== 'event_name' && k !== 'sponsor_name' && k !== 'headline'
+      && !k.includes('color'),
+    )
+    .map(([k, v]) => [k.replace(/_/g, ' '), v as string]);
 
   return (
-    /* 16:9 aspect ratio wrapper */
     <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
       <div style={{
-        position: 'absolute', inset: 0,
-        backgroundColor: bg,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        overflow: 'hidden',
+        position: 'absolute', inset: 0, backgroundColor: bg,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
       }}>
-        {/* Template type badge — top left */}
         <div style={{
           position: 'absolute', top: '5%', left: '5%',
           fontFamily: 'monospace', fontSize: 'clamp(0.45rem, 1.5vw, 0.7rem)',
           fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase',
           opacity: 0.65, color: textColor,
-        }}>
-          {type}
-        </div>
-
-        {/* DRAFT watermark — top right */}
+        }}>{type}</div>
         <div style={{
           position: 'absolute', top: '5%', right: '5%',
           fontFamily: 'monospace', fontSize: 'clamp(0.4rem, 1.2vw, 0.65rem)',
           fontWeight: 700, letterSpacing: '0.2em', opacity: 0.3, color: textColor,
-        }}>
-          PREVIEW
-        </div>
-
-        {/* Title */}
+        }}>PREVIEW</div>
         <div style={{
           color: textColor, fontFamily: 'system-ui, sans-serif',
-          fontSize: 'clamp(1rem, 4.5vw, 3.5rem)',
-          fontWeight: 800, letterSpacing: '-0.02em',
-          marginBottom: '4%', textAlign: 'center', lineHeight: 1.1,
-          padding: '0 8%', wordBreak: 'break-word',
-        }}>
-          {title}
-        </div>
-
-        {/* Field entries */}
+          fontSize: 'clamp(1rem, 4.5vw, 3.5rem)', fontWeight: 800, letterSpacing: '-0.02em',
+          marginBottom: '4%', textAlign: 'center', lineHeight: 1.1, padding: '0 8%', wordBreak: 'break-word',
+        }}>{title}</div>
         <div style={{ width: '70%', maxWidth: '900px' }}>
           {entries.map(([key, val]) => (
             <div key={key} style={{
@@ -545,9 +698,7 @@ function LivePreview({ type, data }: { type: TemplateType; data: TemplateData })
               borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '2%',
               fontSize: 'clamp(0.5rem, 1.4vw, 0.85rem)', color: textColor,
             }}>
-              <span style={{ opacity: 0.55, minWidth: '32%', fontFamily: 'monospace', flexShrink: 0 }}>
-                {key}
-              </span>
+              <span style={{ opacity: 0.55, minWidth: '32%', fontFamily: 'monospace', flexShrink: 0 }}>{key}</span>
               <span style={{ fontWeight: 600, wordBreak: 'break-word' }}>{val}</span>
             </div>
           ))}
@@ -563,110 +714,94 @@ function LivePreview({ type, data }: { type: TemplateType; data: TemplateData })
 }
 
 /* ================================================================== *
- * Validation
- * ================================================================== */
-
-function validate(type: TemplateType, data: TemplateData, expiresAt: string, noExpiry: boolean): string | null {
-  if (!noExpiry && !expiresAt) return 'Expiry date is required. Check "No expiry" if this card runs indefinitely.';
-
-  switch (type) {
-    case 'promo_slide': {
-      const d = data as PromoSlideData;
-      if (!d.title.trim()) return 'Title is required for Promo Slide.';
-      if (d.title.length > 45) return 'Title exceeds 45 characters.';
-      if (d.subtitle.length > 80) return 'Subtitle exceeds 80 characters.';
-      break;
-    }
-    case 'event_banner': {
-      const d = data as EventBannerData;
-      if (!d.event_name.trim()) return 'Event name is required.';
-      if (d.event_name.length > 50) return 'Event name exceeds 50 characters.';
-      if (d.description.length > 120) return 'Description exceeds 120 characters.';
-      break;
-    }
-    case 'sponsor_banner': {
-      const d = data as SponsorBannerData;
-      if (!d.sponsor_name.trim()) return 'Sponsor name is required.';
-      if (d.sponsor_name.length > 40) return 'Sponsor name exceeds 40 characters.';
-      if (d.tagline.length > 80) return 'Tagline exceeds 80 characters.';
-      break;
-    }
-    case 'menu_board': {
-      const d = data as MenuBoardData;
-      for (const s of d.sections) {
-        if (s.section_title.length > 30) return 'Section title exceeds 30 characters.';
-        for (const item of s.items) {
-          if (item.name.length > 30) return 'Menu item name exceeds 30 characters.';
-          if (item.price.length > 10) return 'Menu item price exceeds 10 characters.';
-        }
-      }
-      break;
-    }
-    case 'daily_specials': {
-      const d = data as DailySpecialsData;
-      if (!d.headline.trim()) return 'Headline is required for Daily Specials.';
-      if (d.headline.length > 30) return 'Headline exceeds 30 characters.';
-      for (const item of d.items) {
-        if (item.dish_name.length > 30) return 'Dish name exceeds 30 characters.';
-        if (item.price.length > 10) return 'Price exceeds 10 characters.';
-      }
-      break;
-    }
-  }
-  return null;
-}
-
-/* ================================================================== *
  * MAIN COMPONENT
  * ================================================================== */
 
 export function Component(): JSX.Element {
   const navigate = useNavigate();
 
-  const [templateType, setTemplateType] = useState<TemplateType>('promo_slide');
-  const [formData, setFormData] = useState<TemplateData>(() => defaultData('promo_slide'));
+  // Fetch template catalogue from API (BL-040 / D-019 L2)
+  const { data: templates, isLoading: templatesLoading, isError: templatesError } = useQuery<CardTemplate[]>({
+    queryKey: ['card-templates'],
+    queryFn: () => api.get<CardTemplate[]>('/card-templates'),
+  });
+
+  const [templateType, setTemplateType] = useState<string>('');
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [expiresAt, setExpiresAt] = useState('');
   const [noExpiry, setNoExpiry] = useState(false);
+  const [crossPost, setCrossPost] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // Auto-select first template when catalogue loads
+  useEffect(() => {
+    if (templates && templates.length > 0 && !templateType) {
+      const first = templates[0]!;
+      setTemplateType(first.type_slug);
+      setFormData(defaultDataFromSchema(first.field_schema.fields));
+    }
+  }, [templates, templateType]);
+
+  const currentTemplate = templates?.find((t) => t.type_slug === templateType);
+
   const { mutate: save, isPending, error: saveError } = useMutation({
-    mutationFn: (payload: { template_type: string; data: Record<string, unknown>; expires_at: string | null }) =>
+    mutationFn: (payload: { template_type: string; data: Record<string, unknown>; expires_at: string | null; cross_post?: boolean }) =>
       api.post<{ id: string }>('/content', payload),
     onSuccess: () => {
       navigate('/campaigns');
     },
   });
 
-  function handleTemplateChange(type: TemplateType): void {
-    setTemplateType(type);
-    setFormData(defaultData(type));
+  function handleTemplateChange(slug: string): void {
+    const tmpl = templates?.find((t) => t.type_slug === slug);
+    if (!tmpl) return;
+    setTemplateType(slug);
+    setFormData(defaultDataFromSchema(tmpl.field_schema.fields));
     setValidationError(null);
   }
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
-    const err = validate(templateType, formData, expiresAt, noExpiry);
+    if (!currentTemplate) return;
+
+    const err = validateFromSchema(currentTemplate.field_schema.fields, formData, expiresAt, noExpiry);
     if (err) { setValidationError(err); return; }
     setValidationError(null);
 
-    // Build data object — strip expires_at from the JSONB blob (it's now a DB column)
-    const rawData = formData as unknown as Record<string, unknown>;
-    const { expires_at: _dropped, ...cleanData } = rawData;
-    void _dropped; // prevent unused-var lint warning
     save({
       template_type: templateType,
-      data: cleanData,
+      data: formData,
       expires_at: noExpiry ? null : expiresAt || null,
+      ...(crossPost ? { cross_post: true } : {}),
     });
+  }
+
+  // Loading state
+  if (templatesLoading) {
+    return (
+      <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827' }}>
+        <Link to="/campaigns" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Campaigns</Link>
+        <p style={{ color: '#6b7280', marginTop: '1rem' }}>Loading template catalogue…</p>
+      </div>
+    );
+  }
+
+  if (templatesError || !templates || templates.length === 0) {
+    return (
+      <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827' }}>
+        <Link to="/campaigns" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Campaigns</Link>
+        <div role="alert" style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#991b1b' }}>
+          Failed to load template catalogue. Check that the card_templates table is seeded.
+        </div>
+      </div>
+    );
   }
 
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827' }}>
       {/* Page header */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <Link to="/campaigns" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>
-          ← Campaigns
-        </Link>
+        <Link to="/campaigns" style={{ fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none' }}>← Campaigns</Link>
         <h1 style={{ margin: '0.5rem 0 0.25rem', fontSize: '1.5rem', fontWeight: 600 }}>New campaign</h1>
         <p style={{ margin: 0, fontSize: '0.85rem', color: '#6b7280' }}>
           Choose a template, fill in the fields, then save.
@@ -674,21 +809,21 @@ export function Component(): JSX.Element {
       </div>
 
       {/* Split panel */}
-      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '2rem', alignItems: 'start' }}>
+      <div className="cms-split-panel" style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '2rem', alignItems: 'start' }}>
 
         {/* ---- LEFT: Form ---- */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-          {/* Template selector */}
+          {/* Template selector — driven by API */}
           <FieldGroup>
             <FieldLabel>Template type</FieldLabel>
             <select
               value={templateType}
-              onChange={(e) => handleTemplateChange(e.target.value as TemplateType)}
+              onChange={(e) => handleTemplateChange(e.target.value)}
               style={{ ...inputStyle, fontWeight: 600 }}
             >
-              {TEMPLATE_OPTIONS.map(({ value, label }) => (
-                <option key={value} value={value}>{label}</option>
+              {templates.map((t) => (
+                <option key={t.type_slug} value={t.type_slug}>{t.display_name}</option>
               ))}
             </select>
           </FieldGroup>
@@ -696,21 +831,13 @@ export function Component(): JSX.Element {
           {/* Divider */}
           <div style={{ height: '1px', backgroundColor: '#e5e7eb', margin: '0.25rem 0 1rem' }} />
 
-          {/* Template-specific fields */}
-          {templateType === 'promo_slide' && (
-            <PromoSlideFields data={formData as PromoSlideData} onChange={setFormData} />
-          )}
-          {templateType === 'event_banner' && (
-            <EventBannerFields data={formData as EventBannerData} onChange={setFormData} />
-          )}
-          {templateType === 'sponsor_banner' && (
-            <SponsorBannerFields data={formData as SponsorBannerData} onChange={setFormData} />
-          )}
-          {templateType === 'menu_board' && (
-            <MenuBoardFields data={formData as MenuBoardData} onChange={setFormData} />
-          )}
-          {templateType === 'daily_specials' && (
-            <DailySpecialsFields data={formData as DailySpecialsData} onChange={setFormData} />
+          {/* Schema-driven fields */}
+          {currentTemplate && (
+            <SchemaFields
+              fields={currentTemplate.field_schema.fields}
+              data={formData}
+              onChange={setFormData}
+            />
           )}
 
           {/* Divider */}
@@ -727,50 +854,41 @@ export function Component(): JSX.Element {
               style={{ ...inputStyle, opacity: noExpiry ? 0.4 : 1 }}
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', fontSize: '0.8rem', color: '#6b7280', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={noExpiry}
-                onChange={(e) => { setNoExpiry(e.target.checked); if (e.target.checked) setExpiresAt(''); }}
-              />
+              <input type="checkbox" checked={noExpiry} onChange={(e) => { setNoExpiry(e.target.checked); if (e.target.checked) setExpiresAt(''); }} />
               No expiry — runs indefinitely
+            </label>
+          </FieldGroup>
+
+          {/* Cross-post to social */}
+          <FieldGroup>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#374151', cursor: 'pointer' }}>
+              <input type="checkbox" checked={crossPost} onChange={(e) => setCrossPost(e.target.checked)} />
+              Cross-post to Facebook
             </label>
           </FieldGroup>
 
           {/* Validation error */}
           {validationError && (
-            <div role="alert" style={{
-              padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2',
-              border: '1px solid #fecaca', borderRadius: '5px',
-              color: '#991b1b', fontSize: '0.8rem', marginBottom: '1rem',
-            }}>
+            <div role="alert" style={{ padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '5px', color: '#991b1b', fontSize: '0.8rem', marginBottom: '1rem' }}>
               {validationError}
             </div>
           )}
 
           {/* Save error */}
           {saveError && (
-            <div role="alert" style={{
-              padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2',
-              border: '1px solid #fecaca', borderRadius: '5px',
-              color: '#991b1b', fontSize: '0.8rem', marginBottom: '1rem',
-            }}>
+            <div role="alert" style={{ padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '5px', color: '#991b1b', fontSize: '0.8rem', marginBottom: '1rem' }}>
               Save failed: {saveError instanceof Error ? saveError.message : String(saveError)}
             </div>
           )}
 
           {/* Save button */}
-          <button
-            type="submit"
-            disabled={isPending}
-            style={{
-              padding: '0.65rem 1.25rem',
-              backgroundColor: isPending ? '#93c5fd' : '#1d4ed8',
-              color: '#fff', border: 'none', borderRadius: '6px',
-              fontSize: '0.9rem', fontWeight: 600,
-              cursor: isPending ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.15s',
-            }}
-          >
+          <button type="submit" disabled={isPending} style={{
+            padding: '0.65rem 1.25rem',
+            backgroundColor: isPending ? '#93c5fd' : '#1d4ed8',
+            color: '#fff', border: 'none', borderRadius: '6px',
+            fontSize: '0.9rem', fontWeight: 600,
+            cursor: isPending ? 'not-allowed' : 'pointer',
+          }}>
             {isPending ? 'Saving…' : 'Save campaign'}
           </button>
         </form>
