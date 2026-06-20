@@ -37,13 +37,13 @@ router.get('/:id', async (req, res) => {
 
 // POST /screens
 router.post('/', async (req, res) => {
-  const { id, venue_id, name, screen_group } = req.body;
+  const { id, venue_id, name, screen_group, tenant_id } = req.body;
   if (!id || !venue_id) return res.status(400).json({ error: 'id and venue_id required' });
   if (id.length > 100) return res.status(400).json({ error: 'Screen id must be 100 characters or fewer' });
   try {
     const r = await pool.query(
       'INSERT INTO screens (id, venue_id, name, screen_group, tenant_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [id, venue_id, name ?? null, screen_group ?? null, req.tenantId]
+      [id, venue_id, name ?? null, screen_group ?? null, tenant_id || req.tenantId]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {

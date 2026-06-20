@@ -28,12 +28,12 @@ router.get('/:id', async (req, res) => {
 
 // POST /venues
 router.post('/', async (req, res) => {
-  const { id, name, timezone = 'UTC' } = req.body;
+  const { id, name, timezone = 'UTC', tenant_id } = req.body;
   if (!id || !name) return res.status(400).json({ error: 'id and name required' });
   try {
     const r = await pool.query(
       'INSERT INTO venues (id, name, timezone, tenant_id) VALUES ($1, $2, $3, $4) RETURNING *',
-      [id, name, timezone, req.tenantId]
+      [id, name, timezone, tenant_id || req.tenantId]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
