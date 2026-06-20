@@ -43,7 +43,7 @@ router.post('/ticker', async (req, res) => {
 
 // POST /sponsor/card
 router.post('/card', async (req, res) => {
-  const { sponsor_name, tagline, tier } = req.body || {};
+  const { sponsor_name, tagline, tier, media_url } = req.body || {};
 
   if (!sponsor_name || typeof sponsor_name !== 'string' || !sponsor_name.trim()) {
     return res.status(400).json({ error: 'sponsor_name is required' });
@@ -63,6 +63,7 @@ router.post('/card', async (req, res) => {
       sponsor_name: sponsor_name.trim(),
       tagline: tagline ? tagline.trim() : '',
       tier: resolvedTier,
+      ...(media_url && typeof media_url === 'string' ? { media_url } : {}),
     };
     const r = await pool.query(
       `INSERT INTO content (template_type, data, tenant_id)

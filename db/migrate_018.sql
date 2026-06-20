@@ -8,3 +8,6 @@ CREATE TABLE IF NOT EXISTS cognito_mappings (
   cognito_project_id VARCHAR(100),
   created_at         TIMESTAMPTZ  DEFAULT NOW()
 );
+
+-- BL-046: social_jobs — store Cognito post ID for traceability
+ALTER TABLE social_jobs ADD COLUMN IF NOT EXISTS cognito_post_id VARCHAR(100);

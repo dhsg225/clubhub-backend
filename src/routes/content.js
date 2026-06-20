@@ -21,13 +21,16 @@ router.post('/', async (req, res) => {
       [template_type, JSON.stringify(cleanData), expires_at || null, req.tenantId]
     );
 
-    // BL-038: enqueue social cross-post job if requested
+    // BL-038/BL-046: enqueue social cross-post jobs if requested
     if (cross_post === true) {
+      const platforms = Array.isArray(req.body.platforms) ? req.body.platforms : ['facebook'];
       try {
-        await pool.query(
-          'INSERT INTO social_jobs (content_id, platform, tenant_id) VALUES ($1, $2, $3)',
-          [result.rows[0].id, 'facebook', req.tenantId]
-        );
+        for (const platform of platforms) {
+          await pool.query(
+            'INSERT INTO social_jobs (content_id, platform, tenant_id) VALUES ($1, $2, $3)',
+            [result.rows[0].id, platform, req.tenantId]
+          );
+        }
       } catch (jobErr) {
         // Non-fatal: content created, social job failed — log and continue
         console.error('social_jobs insert failed:', jobErr.message);

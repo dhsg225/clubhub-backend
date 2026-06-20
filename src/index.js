@@ -30,6 +30,7 @@ const tenantsRouter        = require('./routes/tenants');
 const sponsorRouter        = require('./routes/sponsor');
 const cardTemplatesRouter  = require('./routes/card-templates');
 const mediaRouter          = require('./routes/media');
+const aiRouter             = require('./routes/ai');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -116,6 +117,9 @@ app.use('/card-templates', serveSpaForBrowser, rateLimit.write, injectTenantCont
 
 // Media upload tokens (BL-041 — direct browser→Bunny upload)
 app.use('/media', rateLimit.write, injectTenantContext, mediaRouter);
+
+// AI generation via Cognito bridge (BL-047)
+app.use('/ai', serveSpaForBrowser, rateLimit.write, injectTenantContext, aiRouter);
 
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);
