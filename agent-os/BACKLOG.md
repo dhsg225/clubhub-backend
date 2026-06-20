@@ -227,6 +227,43 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | ~~BL-F07~~ | Promoted to active → DONE (see below). |
 | BL-F08 | Image upload + server-side WebP conversion at 1920×1080 — required before any card type uses images in production. |
 | BL-F09 | promo_slide production renderer — promoted to BL-023 (active). |
+| BL-F10 | TV playout scheduler extension — programme loop + timed ad break injection + proof of play log. Scope below. **Do not build until licensed venue flow is end-to-end verified on real hardware.** |
+
+### BL-F10 — TV playout scheduler extension (Hotel / DOOH mode) `[L]`
+
+**Trigger**: Licensed venue flow verified end-to-end on real Pi hardware. Do not start before that.
+
+**Context**: Hotels and DOOH venues need a playout model closer to a TV station — a continuous programme loop interrupted at regular intervals by timed ad breaks. Pi Signage (current hotel deployment) lacks this. ClubHub replaces it with precise ad injection and proof-of-play logging.
+
+**Core concepts**:
+- **Programme playlist** — loops continuously in the main zone (existing playlist type, no change)
+- **Break playlist** — a new playlist type (`playlist_type: 'break'`). Interrupts the programme at a configurable interval, plays 1–N spots, then returns to programme.
+- **Spot** — a card within a break playlist. Has a `weight` (integer, default 1) controlling share of voice. Higher weight = selected more often when the scheduler picks spots for a break.
+- **Ad break interval** — `ad_break_interval_seconds` on the screen (e.g. 240 = every 4 minutes).
+- **Proof of play** — every card that actually renders gets a playout log entry: `{screen_id, content_id, played_at, duration_seconds}`. Queryable by screen and date range.
+- **Share of voice** — when multiple sponsors have spots in a break playlist, the scheduler picks spots proportionally by weight. A spot with weight 3 gets 3× the airtime of a weight-1 spot.
+
+**What needs to be built**:
+1. `migrate_011.sql`: `named_playlists` gets `playlist_type VARCHAR(20) DEFAULT 'programme'` (`'programme'` | `'break'`). `named_playlist_items` gets `weight INTEGER DEFAULT 1`. `screens` gets `ad_break_interval_seconds INTEGER NULL`. New table: `playout_log (id UUID, screen_id VARCHAR, content_id UUID, played_at TIMESTAMPTZ, duration_seconds INTEGER)`.
+2. Backend: `GET /playout_log?screen_id=&date=` for proof-of-play queries.
+3. Player-UI: break scheduler logic — tracks time since last break, fires break playlist at interval, weighted random spot selection, returns to programme position.
+4. PRE engine extension: corpus includes break playlist + interval config alongside programme playlist.
+5. CMS: playlist type selector (programme vs break) in PlaylistComposer. Screen detail shows break interval config. Proof-of-play report page (`/reports/playout`).
+
+**Acceptance criteria** (when scoped for build):
+1. Screen with `ad_break_interval_seconds = 240` fires a break every 4 minutes ± 5 seconds
+2. Spots selected proportionally by weight across 100 break firings (within 10% of expected distribution)
+3. Every played card logged to `playout_log` with correct `played_at` and `duration_seconds`
+4. `GET /playout_log?screen_id=X&date=2026-07-01` returns all entries for that screen/day
+5. Programme resumes after break without restarting from beginning
+6. 72h offline autonomy preserved (break schedule resolved from corpus, no live API call)
+
+**Files** (when ready): `backend/db/migrate_011.sql`, `backend/src/routes/playout-log.js`, `apps/player-ui/src/break-scheduler.ts`, `apps/cms-web/src/routes/PlayoutReport.tsx`, `apps/cms-web/src/routes/PlaylistComposer.tsx` (type field), `apps/cms-web/src/routes/VenueDashboard.tsx` (interval field)
+
+**Role**: Feature Development
+**Status**: FUTURE — do not build until licensed venue flow end-to-end on real hardware
+
+---
 
 ### BL-024 — Zone support: layout_template on screens + zone_name on schedules `[S]`
 - **What**: Implement D-015. Add the two DB columns that make zone-based layouts possible. Wire `zone_name` into the Schedule Creator UI and update the Screen detail page to show a layout template picker.
