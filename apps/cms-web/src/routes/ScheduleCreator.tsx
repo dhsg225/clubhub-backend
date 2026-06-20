@@ -29,6 +29,35 @@ interface Venue {
 type Target = 'global' | 'venue' | 'screen';
 
 /* ------------------------------------------------------------------ *
+ * Layout / zone definitions
+ * ------------------------------------------------------------------ */
+
+const LAYOUT_ZONES: Record<string, string[]> = {
+  fullscreen:       ['main'],
+  split_horizontal: ['main_left', 'main_right', 'ticker'],
+  news_bar:         ['main', 'ticker'],
+  quad:             ['top_left', 'top_right', 'bottom_left', 'bottom_right'],
+};
+
+const LAYOUT_LABELS: Record<string, string> = {
+  fullscreen:       'Full Screen',
+  split_horizontal: 'Split Horizontal',
+  news_bar:         'News Bar',
+  quad:             'Quad',
+};
+
+const ZONE_LABELS: Record<string, string> = {
+  main:         'Main (full screen)',
+  main_left:    'Main Left',
+  main_right:   'Main Right',
+  ticker:       'Ticker Strip',
+  top_left:     'Top Left',
+  top_right:    'Top Right',
+  bottom_left:  'Bottom Left',
+  bottom_right: 'Bottom Right',
+};
+
+/* ------------------------------------------------------------------ *
  * Day definitions — Mon=1 … Sat=6, Sun=0 (matches engine convention)
  * ------------------------------------------------------------------ */
 
@@ -98,6 +127,8 @@ export function Component(): JSX.Element {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
+  const [layoutTemplate, setLayoutTemplate] = useState('fullscreen');
+  const [zoneName, setZoneName] = useState('main');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   /* ---- Data queries ---- */
@@ -156,6 +187,7 @@ export function Component(): JSX.Element {
       time_of_day_start: daypartEnabled ? timeStart : null,
       time_of_day_end: daypartEnabled ? timeEnd : null,
       duration: 10,
+      zone_name: zoneName,
     });
   }
 
@@ -266,6 +298,46 @@ export function Component(): JSX.Element {
             style={{ ...inputStyle, width: '80px' }}
           />
           <HelpText>Higher priority overrides lower when schedules overlap. 10 = highest.</HelpText>
+        </section>
+
+        <Divider />
+
+        {/* Section 3b — Layout + Zone */}
+        <section>
+          <SectionHeading>Layout &amp; zone</SectionHeading>
+          <div style={{ marginBottom: '0.75rem' }}>
+            <FieldLabel htmlFor="layout-select">Layout template</FieldLabel>
+            <select
+              id="layout-select"
+              value={layoutTemplate}
+              onChange={(e) => {
+                const lt = e.target.value;
+                setLayoutTemplate(lt);
+                setZoneName(LAYOUT_ZONES[lt]?.[0] ?? 'main');
+              }}
+              style={inputStyle}
+            >
+              {Object.entries(LAYOUT_LABELS).map(([val, label]) => (
+                <option key={val} value={val}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          {(LAYOUT_ZONES[layoutTemplate]?.length ?? 1) > 1 && (
+            <div>
+              <FieldLabel htmlFor="zone-select">Zone</FieldLabel>
+              <select
+                id="zone-select"
+                value={zoneName}
+                onChange={(e) => setZoneName(e.target.value)}
+                style={inputStyle}
+              >
+                {(LAYOUT_ZONES[layoutTemplate] ?? []).map((z) => (
+                  <option key={z} value={z}>{ZONE_LABELS[z] ?? z}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </section>
 
         <Divider />

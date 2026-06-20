@@ -21,6 +21,7 @@ router.post('/', async (req, res) => {
     time_of_day_end   = null,
     duration        = 10,
     is_fallback     = false,
+    zone_name       = 'main',
   } = req.body;
 
   if (!content_id && !playlist_id) {
@@ -53,20 +54,26 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'days_of_week values must be integers 0–6 (0=Sun, 6=Sat)' });
     }
   }
+  if (!zone_name || typeof zone_name !== 'string' || zone_name.trim().length === 0) {
+    return res.status(400).json({ error: 'zone_name must be a non-empty string' });
+  }
+  if (zone_name.length > 40) {
+    return res.status(400).json({ error: 'zone_name must be 40 characters or fewer' });
+  }
 
   try {
     const r = await pool.query(
       `INSERT INTO schedules
          (content_id, playlist_id, venue_id, screen_id, screen_group, priority,
           starts_at, ends_at, days_of_week, time_of_day_start, time_of_day_end,
-          duration, is_fallback)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          duration, is_fallback, zone_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
       [
         content_id || null, playlist_id || null,
         venue_id, screen_id, screen_group, priority,
         starts_at, ends_at, days_of_week, time_of_day_start, time_of_day_end,
-        duration, is_fallback,
+        duration, is_fallback, zone_name,
       ]
     );
 

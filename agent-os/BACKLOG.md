@@ -240,7 +240,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   7. `pnpm --filter @clubhub/cms-web typecheck` passes.
 - **Files**: `backend/db/migrate_010.sql` (new), `backend/src/routes/schedules.js`, `backend/src/routes/screens.js`, `apps/cms-web/src/routes/ScheduleCreator.tsx`, `apps/cms-web/src/routes/VenueDashboard.tsx`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Agent 3
 
 ---
 
@@ -256,3 +256,4 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-INT-01 | 2026-06-09 | Integration harness re-validated after BL-002 auth enforcement: 34/34 GREEN. Player-runtime uses cms-api:3001 (not backend:4000); SCREEN_AUTH_ENFORCE has no effect on harness. — CH1 |
 | BL-F06 | 2026-06-19 | Playlist Composer complete. migrate_008.sql (named_playlists table), named-playlists.js Express router (5 endpoints), PlaylistList.tsx (/playlists), PlaylistComposer.tsx (/playlists/new + /playlists/:id), AppLayout Playlists nav link. Deployed to production. 0 typecheck errors. — Agent 3 |
 | BL-F07 | 2026-06-19 | Schedule Creator complete. migrate_009.sql (playlist_id FK on schedules), schedules.js extended (playlist_id support, LEFT JOIN named_playlists), ScheduleList.tsx (/schedules), ScheduleCreator.tsx (/schedules/new), AppLayout Schedules nav link, App.tsx routes wired. 118 modules built, 0 typecheck errors. Production deploy PENDING (SSH port 22 connection refused — port blocked). — Agent 3 |
+| BL-024 | 2026-06-20 | Zone support complete. migrate_010.sql (zone_name on schedules + layout_template on screens), schedules.js POST accepts zone_name, screens.js PATCH /:id added, ScheduleCreator.tsx layout+zone section, VenueDashboard.tsx layout column with inline select + optimistic UI + error revert, api-client.ts patch() added. 118 modules, 0 typecheck errors. Deployed to production. — Agent 3 |

@@ -83,6 +83,30 @@ router.patch('/:id/heartbeat', async (req, res) => {
   }
 });
 
+// PATCH /screens/:id — update screen settings (layout_template, etc.)
+router.patch('/:id', async (req, res) => {
+  const ALLOWED_LAYOUTS = ['fullscreen', 'split_horizontal', 'news_bar', 'quad'];
+  const { layout_template } = req.body;
+
+  if (!layout_template) {
+    return res.status(400).json({ error: 'layout_template required' });
+  }
+  if (!ALLOWED_LAYOUTS.includes(layout_template)) {
+    return res.status(400).json({ error: `layout_template must be one of: ${ALLOWED_LAYOUTS.join(', ')}` });
+  }
+
+  try {
+    const r = await pool.query(
+      'UPDATE screens SET layout_template = $1 WHERE id = $2 RETURNING *',
+      [layout_template, req.params.id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /screens/enroll — first-boot enrollment (SECURITY_MODEL.md §2.1)
 router.post('/enroll', async (req, res) => {
   const { screen_id, enrollment_token } = req.body || {};

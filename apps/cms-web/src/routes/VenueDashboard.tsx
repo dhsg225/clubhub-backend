@@ -10,8 +10,9 @@
  *    distinct badge.
  */
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useState } from 'react';
 import { api } from '../lib/api-client.js';
 
 interface Venue {
@@ -32,7 +33,21 @@ interface Screen {
   assets_required_count: number | null;
   assets_verified_count: number | null;
   content_readiness_state: string | null;
+  layout_template: string | null;
 }
+
+/* ------------------------------------------------------------------ *
+ * Layout constants
+ * ------------------------------------------------------------------ */
+
+const LAYOUT_OPTIONS = ['fullscreen', 'split_horizontal', 'news_bar', 'quad'] as const;
+
+const LAYOUT_LABELS: Record<string, string> = {
+  fullscreen:       'Full Screen',
+  split_horizontal: 'Split Horizontal',
+  news_bar:         'News Bar',
+  quad:             'Quad',
+};
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -158,7 +173,17 @@ function AutonomyClock({ lastCorpusSyncAt }: { lastCorpusSyncAt: string | null }
  * Screen row
  * ------------------------------------------------------------------ */
 
-function ScreenRow({ screen }: { screen: Screen }): JSX.Element {
+function ScreenRow({
+  screen,
+  layoutSelection,
+  onLayoutChange,
+  layoutError,
+}: {
+  screen: Screen;
+  layoutSelection: string;
+  onLayoutChange: (screenId: string, value: string) => void;
+  layoutError: string | null;
+}): JSX.Element {
   const hours = hoursSinceContact(screen.last_corpus_sync_at);
   const isExpiredAutonomy = hours !== null && hours > AUTONOMY_WINDOW_HOURS;
 
@@ -190,6 +215,25 @@ function ScreenRow({ screen }: { screen: Screen }): JSX.Element {
           verified={screen.assets_verified_count}
         />
       </td>
+      <td style={tdStyle}>
+        <select
+          value={layoutSelection}
+          onChange={(e) => onLayoutChange(screen.id, e.target.value)}
+          style={{
+            fontSize: '0.8rem', padding: '0.2rem 0.4rem',
+            border: '1px solid #d1d5db', borderRadius: '4px',
+            color: '#111827', backgroundColor: '#fff',
+            fontFamily: 'system-ui, sans-serif',
+          }}
+        >
+          {LAYOUT_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>{LAYOUT_LABELS[opt]}</option>
+          ))}
+        </select>
+        {layoutError && (
+          <div style={{ marginTop: '0.2rem', fontSize: '0.7rem', color: '#991b1b' }}>{layoutError}</div>
+        )}
+      </td>
     </tr>
   );
 }
@@ -200,6 +244,11 @@ function ScreenRow({ screen }: { screen: Screen }): JSX.Element {
 
 export function Component(): JSX.Element {
   const { venueId } = useParams<{ venueId: string }>();
+  const queryClient = useQueryClient();
+
+  // Optimistic layout selections keyed by screen id
+  const [layoutSelections, setLayoutSelections] = useState<Record<string, string>>({});
+  const [layoutErrors, setLayoutErrors] = useState<Record<string, string>>({});
 
   const { data: venue, isLoading: venueLoading, isError: venueError, error: venueErr } =
     useQuery<Venue>({
@@ -214,6 +263,30 @@ export function Component(): JSX.Element {
       queryFn: () => api.get<Screen[]>(`/screens?venue_id=${venueId}`),
       enabled: !!venueId,
     });
+
+  const { mutate: patchLayout } = useMutation({
+    mutationFn: ({ screenId, layout_template }: { screenId: string; layout_template: string }) =>
+      api.patch<Screen>(`/screens/${screenId}`, { layout_template }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['screens', venueId] }),
+    onError: (err, variables) => {
+      // Revert optimistic selection
+      const screen = screens?.find((s) => s.id === variables.screenId);
+      setLayoutSelections((prev) => ({
+        ...prev,
+        [variables.screenId]: screen?.layout_template ?? 'fullscreen',
+      }));
+      setLayoutErrors((prev) => ({
+        ...prev,
+        [variables.screenId]: err instanceof Error ? err.message : 'Update failed',
+      }));
+    },
+  });
+
+  function handleLayoutChange(screenId: string, value: string): void {
+    setLayoutSelections((prev) => ({ ...prev, [screenId]: value }));
+    setLayoutErrors((prev) => ({ ...prev, [screenId]: '' }));
+    patchLayout({ screenId, layout_template: value });
+  }
 
   if (venueLoading) {
     return (
@@ -308,11 +381,18 @@ export function Component(): JSX.Element {
                   <th style={thStyle}>72h Autonomy Clock</th>
                   <th style={thStyle}>Content Readiness</th>
                   <th style={thStyle}>Assets (verified/required)</th>
+                  <th style={thStyle}>Layout</th>
                 </tr>
               </thead>
               <tbody>
                 {screens?.map((screen) => (
-                  <ScreenRow key={screen.id} screen={screen} />
+                  <ScreenRow
+                    key={screen.id}
+                    screen={screen}
+                    layoutSelection={layoutSelections[screen.id] ?? screen.layout_template ?? 'fullscreen'}
+                    onLayoutChange={handleLayoutChange}
+                    layoutError={layoutErrors[screen.id] ?? null}
+                  />
                 ))}
               </tbody>
             </table>
