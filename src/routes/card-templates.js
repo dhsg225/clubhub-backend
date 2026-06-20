@@ -77,4 +77,63 @@ router.post('/', requireAdminKey, async (req, res) => {
   }
 });
 
+// PATCH /card-templates/:slug — update display_name, field_schema, sort_order
+router.patch('/:slug', requireAdminKey, async (req, res) => {
+  const { display_name, field_schema, sort_order } = req.body;
+
+  const updates = [];
+  const values = [];
+  let idx = 1;
+
+  if (display_name !== undefined) {
+    if (typeof display_name !== 'string' || !display_name.trim()) {
+      return res.status(400).json({ error: 'display_name cannot be empty' });
+    }
+    updates.push(`display_name = $${idx++}`);
+    values.push(display_name.trim());
+  }
+  if (field_schema !== undefined) {
+    if (!field_schema || typeof field_schema !== 'object' || !Array.isArray(field_schema.fields)) {
+      return res.status(400).json({ error: 'field_schema must be an object with a fields array' });
+    }
+    updates.push(`field_schema = $${idx++}`);
+    values.push(field_schema);
+  }
+  if (sort_order !== undefined) {
+    updates.push(`sort_order = $${idx++}`);
+    values.push(sort_order);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  values.push(req.params.slug);
+
+  try {
+    const r = await pool.query(
+      `UPDATE card_templates SET ${updates.join(', ')} WHERE type_slug = $${idx} RETURNING *`,
+      values
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /card-templates/:slug — remove a template (cannot delete system templates in enforce mode)
+router.delete('/:slug', requireAdminKey, async (req, res) => {
+  try {
+    const r = await pool.query(
+      'DELETE FROM card_templates WHERE type_slug = $1 RETURNING type_slug',
+      [req.params.slug]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json({ deleted: true, type_slug: r.rows[0].type_slug });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
