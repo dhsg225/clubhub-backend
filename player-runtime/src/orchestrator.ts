@@ -401,6 +401,7 @@ export class PlayerOrchestrator {
         resolved.playlist_checksum,
         resolved.screen_layout ?? 'fullscreen',
         enrichedZones,
+        { ticker_items: resolved.ticker_items ?? [] },
       );
 
       const packet = {
@@ -466,6 +467,7 @@ export class PlayerOrchestrator {
           cachedPlaylist.playlist_checksum,
           cachedPlaylist.screen_layout ?? 'fullscreen',
           cachedZones,
+          { ticker_items: cachedPlaylist.ticker_items ?? [] },
         );
       } else {
         console.error('[orchestrator] No playlist available — player has no content');

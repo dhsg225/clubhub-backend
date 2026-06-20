@@ -55,6 +55,7 @@ const router = createBrowserRouter([
       { path: '/schedules/new', lazy: () => import('./routes/ScheduleCreator.js') },
       { path: '/content/new', lazy: () => import('./routes/ContentNew.js') },
       { path: '/content/:id', lazy: () => import('./routes/ContentDetail.js') },
+      { path: '/ticker', lazy: () => import('./routes/TickerManager.js') },
       { path: '/templates', lazy: () => import('./routes/TemplateGallery.js') },
       { path: '/audit', lazy: () => import('./routes/AuditLog.js') },
       { path: '/constitutional', lazy: () => import('./routes/ConstitutionalConsole.js') },

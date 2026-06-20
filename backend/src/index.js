@@ -12,6 +12,7 @@ const requestId     = require('./middleware/requestId');
 const { rateLimit } = require('./middleware/rateLimiter');
 const timeout       = require('./middleware/timeout');
 const screenAuth    = require('./middleware/screenAuth');
+const { injectTenantContext, loadDefaultTenantId } = require('./middleware/tenantContext');
 
 const healthRouter    = require('./routes/health');
 const contentRouter   = require('./routes/content');
@@ -24,6 +25,7 @@ const schedulesRouter = require('./routes/schedules');
 const resolveRouter        = require('./routes/resolve');
 const otaRouter            = require('./routes/ota');
 const namedPlaylistsRouter = require('./routes/named-playlists');
+const tickerRouter         = require('./routes/ticker');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -84,16 +86,19 @@ const serveSpaForBrowser = (req, res, next) => {
 };
 
 // Write endpoints: moderate limit
-app.use('/content',   serveSpaForBrowser, rateLimit.write, contentRouter);
-app.use('/schedules', serveSpaForBrowser, rateLimit.write, schedulesRouter);
-app.use('/venues',    serveSpaForBrowser, rateLimit.write, venuesRouter);
-app.use('/screens',   serveSpaForBrowser, rateLimit.write, screensRouter);
+app.use('/content',   serveSpaForBrowser, rateLimit.write, injectTenantContext, contentRouter);
+app.use('/schedules', serveSpaForBrowser, rateLimit.write, injectTenantContext, schedulesRouter);
+app.use('/venues',    serveSpaForBrowser, rateLimit.write, injectTenantContext, venuesRouter);
+app.use('/screens',   serveSpaForBrowser, rateLimit.write, injectTenantContext, screensRouter);
 
 // OTA delivery — operator API + Pi polling
 app.use('/ota',       rateLimit.heavy, otaRouter);
 
 // Named playlists (operator-authored playlist groups)
-app.use('/named_playlists', serveSpaForBrowser, rateLimit.write, namedPlaylistsRouter);
+app.use('/named_playlists', serveSpaForBrowser, rateLimit.write, injectTenantContext, namedPlaylistsRouter);
+
+// Ticker items (operator-authored scrolling text)
+app.use('/ticker', serveSpaForBrowser, rateLimit.write, injectTenantContext, tickerRouter);
 
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);
@@ -129,6 +134,9 @@ app.use((err, req, res, _next) => {
 
 async function start() {
   await waitForDb();
+
+  // Load default tenant UUID before routes mount (D-018)
+  await loadDefaultTenantId();
 
   // ── Governance DB init (before app.listen) ──────────────────────────────────
   const { pool }       = require('./db');

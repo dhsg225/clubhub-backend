@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 export type EmergencyCommand =
   | { type: 'EMERGENCY_FREEZE'; reason: string }
   | { type: 'EMERGENCY_CLEAR' }
-  | { type: 'PLAYLIST_UPDATE'; checksum: string; screen_layout: string; zones: Record<string, unknown[]> }
+  | { type: 'PLAYLIST_UPDATE'; checksum: string; screen_layout: string; zones: Record<string, unknown[]>; corpus_data: Record<string, unknown> }
   | { type: 'CONSTITUTIONAL_STATE'; state: string };
 
 export class EmergencyRenderer {
@@ -40,12 +40,17 @@ export class EmergencyRenderer {
     console.log('[emergency-renderer] EMERGENCY_FREEZE cleared by authorized operator');
   }
 
-  sendPlaylistUpdate(checksum: string, screenLayout: string, zones: Record<string, unknown[]>): void {
+  sendPlaylistUpdate(
+    checksum: string,
+    screenLayout: string,
+    zones: Record<string, unknown[]>,
+    corpusData: Record<string, unknown> = {},
+  ): void {
     if (this.frozen) {
       console.warn('[emergency-renderer] Suppressing playlist update during EMERGENCY_FREEZE');
       return;
     }
-    this.broadcast({ type: 'PLAYLIST_UPDATE', checksum, screen_layout: screenLayout, zones });
+    this.broadcast({ type: 'PLAYLIST_UPDATE', checksum, screen_layout: screenLayout, zones, corpus_data: corpusData });
   }
 
   sendConstitutionalState(state: string): void {

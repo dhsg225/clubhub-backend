@@ -31,6 +31,7 @@ export function AppLayout(): JSX.Element {
           <NavLink to="/campaigns" style={navLinkStyle}>Campaigns</NavLink>
           <NavLink to="/playlists" style={navLinkStyle}>Playlists</NavLink>
           <NavLink to="/schedules" style={navLinkStyle}>Schedules</NavLink>
+          <NavLink to="/ticker" style={navLinkStyle}>Ticker</NavLink>
           <NavLink to="/templates" style={navLinkStyle}>Templates</NavLink>
           {(role === 'AUDITOR' || role === 'ENTERPRISE_ADMIN' || role === 'PLATFORM_ADMIN') && (
             <NavLink to="/audit" style={navLinkStyle}>Audit</NavLink>

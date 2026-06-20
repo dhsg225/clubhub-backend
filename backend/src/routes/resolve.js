@@ -17,12 +17,17 @@ router.get('/:screen_id', async (req, res) => {
   }
 
   try {
-    const [manifest, screenRow] = await Promise.all([
+    const [manifest, screenRow, tickerRow] = await Promise.all([
       getManifest(screen_id),
       pool.query('SELECT screen_layout FROM screens WHERE id = $1', [screen_id]),
+      pool.query(
+        'SELECT text FROM ticker_items WHERE screen_id = $1 AND active = true ORDER BY display_order ASC, created_at ASC',
+        [screen_id]
+      ),
     ]);
 
     const screen_layout = screenRow.rows[0]?.screen_layout ?? 'fullscreen';
+    const ticker_items = tickerRow.rows.map(r => r.text);
 
     // Flat playlist (backward compat — all items regardless of zone)
     const playlist = (manifest.items ?? []).map(item => ({
@@ -59,6 +64,7 @@ router.get('/:screen_id', async (req, res) => {
     const resolved = {
       screen_id,
       screen_layout,
+      ticker_items,
       resolved_at:       Date.now(),
       resolution_level:  (manifest.items?.length ?? 0) > 0 ? 1 : 0,
       is_fallback:       manifest.items?.every(i => i.source === 'fallback') ?? false,

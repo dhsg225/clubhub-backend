@@ -21,6 +21,7 @@ export interface ResolvedPlaylist {
   readonly playlist_checksum: string;
   readonly playlist: PlaylistItem[];
   readonly zones: Record<string, PlaylistItem[]>;
+  readonly ticker_items: string[];
   readonly _meta: {
     readonly correlation_id: string;
     readonly at_utc_ms: number;
@@ -99,6 +100,7 @@ export class PlaylistPoller {
         ...raw,
         screen_layout: raw.screen_layout ?? 'fullscreen',
         zones,
+        ticker_items: raw.ticker_items ?? [],
       };
 
       // Verify PREVIEW: prefix never appears in production polling

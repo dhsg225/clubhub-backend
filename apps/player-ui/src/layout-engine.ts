@@ -19,6 +19,7 @@ import { instantiateWidget, type WidgetInstance } from './widget-registry.js';
 // Trigger widget self-registration on import
 import './widgets/clock.js';
 import './widgets/date-display.js';
+import './widgets/ticker-scroll.js';
 
 interface PlaylistItem {
   content_id: string;
