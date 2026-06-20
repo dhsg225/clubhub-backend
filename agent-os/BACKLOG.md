@@ -224,7 +224,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-F04 | pg pool scaling beyond 10 — trigger: ≥ 100 enrolled screens (see BL-005) |
 | BL-F05 | Automated corpus cache upload on 50MB cap — trigger: venues reporting replay errors |
 | ~~BL-F06~~ | Promoted to BL-F06 → DONE (see below). |
-| BL-F07 | Schedule creator UI — map a playlist to venue/screen group with daypart window. Depends on BL-F06. |
+| ~~BL-F07~~ | Promoted to active → DONE (see below). |
 | BL-F08 | Image upload + server-side WebP conversion at 1920×1080 — required before any card type uses images in production. |
 | BL-F09 | promo_slide production renderer — promoted to BL-023 (active). |
 
@@ -241,3 +241,4 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-007 | 2026-06-08 | OTA canary manual verification procedure documented — DOCS-1 |
 | BL-INT-01 | 2026-06-09 | Integration harness re-validated after BL-002 auth enforcement: 34/34 GREEN. Player-runtime uses cms-api:3001 (not backend:4000); SCREEN_AUTH_ENFORCE has no effect on harness. — CH1 |
 | BL-F06 | 2026-06-19 | Playlist Composer complete. migrate_008.sql (named_playlists table), named-playlists.js Express router (5 endpoints), PlaylistList.tsx (/playlists), PlaylistComposer.tsx (/playlists/new + /playlists/:id), AppLayout Playlists nav link. Deployed to production. 0 typecheck errors. — Agent 3 |
+| BL-F07 | 2026-06-19 | Schedule Creator complete. migrate_009.sql (playlist_id FK on schedules), schedules.js extended (playlist_id support, LEFT JOIN named_playlists), ScheduleList.tsx (/schedules), ScheduleCreator.tsx (/schedules/new), AppLayout Schedules nav link, App.tsx routes wired. 118 modules built, 0 typecheck errors. Production deploy PENDING (SSH port 22 connection refused — port blocked). — Agent 3 |

@@ -8,7 +8,8 @@ const router = express.Router();
 // POST /schedules
 router.post('/', async (req, res) => {
   const {
-    content_id,
+    content_id      = null,
+    playlist_id     = null,
     venue_id        = null,
     screen_id       = null,
     screen_group    = null,
@@ -22,8 +23,11 @@ router.post('/', async (req, res) => {
     is_fallback     = false,
   } = req.body;
 
-  if (!content_id) {
-    return res.status(400).json({ error: 'content_id required' });
+  if (!content_id && !playlist_id) {
+    return res.status(400).json({ error: 'content_id or playlist_id required' });
+  }
+  if (content_id && playlist_id) {
+    return res.status(400).json({ error: 'provide content_id or playlist_id, not both' });
   }
   if (!venue_id && !screen_id) {
     return res.status(400).json({ error: 'venue_id or screen_id required' });
@@ -53,13 +57,14 @@ router.post('/', async (req, res) => {
   try {
     const r = await pool.query(
       `INSERT INTO schedules
-         (content_id, venue_id, screen_id, screen_group, priority,
+         (content_id, playlist_id, venue_id, screen_id, screen_group, priority,
           starts_at, ends_at, days_of_week, time_of_day_start, time_of_day_end,
           duration, is_fallback)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING *`,
       [
-        content_id, venue_id, screen_id, screen_group, priority,
+        content_id || null, playlist_id || null,
+        venue_id, screen_id, screen_group, priority,
         starts_at, ends_at, days_of_week, time_of_day_start, time_of_day_end,
         duration, is_fallback,
       ]
@@ -90,15 +95,19 @@ router.get('/', async (req, res) => {
   const conds = [];
   const vals  = [];
 
-  if (content_id) { conds.push(`content_id = $${vals.length + 1}`); vals.push(content_id); }
-  if (screen_id)  { conds.push(`screen_id  = $${vals.length + 1}`); vals.push(screen_id);  }
-  if (venue_id)   { conds.push(`venue_id   = $${vals.length + 1}`); vals.push(venue_id);   }
+  if (content_id) { conds.push(`s.content_id = $${vals.length + 1}`); vals.push(content_id); }
+  if (screen_id)  { conds.push(`s.screen_id  = $${vals.length + 1}`); vals.push(screen_id);  }
+  if (venue_id)   { conds.push(`s.venue_id   = $${vals.length + 1}`); vals.push(venue_id);   }
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
   try {
     const r = await pool.query(
-      `SELECT * FROM schedules ${where} ORDER BY priority DESC, created_at ASC`,
+      `SELECT s.*, np.name AS playlist_name
+       FROM schedules s
+       LEFT JOIN named_playlists np ON np.id = s.playlist_id
+       ${where}
+       ORDER BY s.priority DESC, s.created_at ASC`,
       vals
     );
     res.json(r.rows);
