@@ -429,6 +429,52 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   4. `POST /venues` and `POST /screens` updated to accept optional `tenant_id` in body — if omitted, use `req.tenantId` (the default tenant). This allows creating resources for a specific tenant.
 - **Files**: `backend/src/routes/tenants.js` (new), `backend/src/index.js`, `backend/src/routes/venues.js`, `backend/src/routes/screens.js`
 - **Role**: Feature Development — Terminal Agent 1
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. tenants CRUD (GET/POST/GET/:id/PATCH/:id), X-Admin-Key guard when enforce=true, POST /venues and POST /screens accept optional tenant_id. Deployed to production, "Acme Pubs" tenant created as verification.
+
+---
+
+## Ecosystem Frontends (BL-037 → BL-039) — independent, can run in parallel
+
+### BL-037 — Sponsor portal shell + backend ingest route `[M]`
+- **What**: Stand up `apps/sponsor-portal` as a runnable Vite + React app. Sponsor logs in, sees one form: upload a text string (for ticker) or an image file (creates a `sponsor_banner` card). No layout/schedule controls. Backend ingest route validates and writes directly to `ticker_items` or `content` under the tenant.
+- **Acceptance criteria**:
+  1. `apps/sponsor-portal` — Vite + React app starts. Single flow: login stub → upload form.
+  2. Upload form has two tabs: "Text / News Item" (280 char → POST `/sponsor/ticker`) and "Sponsor Banner" (name, tagline, tier → POST `/sponsor/card`).
+  3. `backend/src/routes/sponsor.js` (new): POST /sponsor/ticker inserts into `ticker_items` (screen_id = `'screen-1'` for now). POST /sponsor/card inserts into `content` as `sponsor_banner`.
+  4. Both routes validate input, return `{ ok: true, id }`.
+  5. `pnpm --filter @clubhub/sponsor-portal build` passes. 0 typecheck errors.
+- **Files**: `apps/sponsor-portal/` (scaffold), `backend/src/routes/sponsor.js` (new), `backend/src/index.js`
+- **Role**: Feature Development — Agent 2
+- **Status**: TODO
+
+---
+
+### BL-038 — Social pipeline stub: jobs table + cross_post hook `[S]`
+- **What**: Wire the social publishing pipeline as an async queue — no real API calls. When a card is created with `cross_post: true`, a job is enqueued. A background worker polls the table every 30s and logs what it would post. Establishes the pattern for real Meta integration later without blocking the CMS flow.
+- **Acceptance criteria**:
+  1. `backend/db/migrate_014.sql`: `CREATE TABLE social_jobs (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, content_id UUID REFERENCES content(id) ON DELETE CASCADE, tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE, platform VARCHAR(20) NOT NULL DEFAULT 'facebook', status VARCHAR(20) NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), processed_at TIMESTAMPTZ NULL, error TEXT NULL)`
+  2. `backend/src/routes/content.js` POST — if `req.body.cross_post === true`, after inserting the card, insert a `social_jobs` row with `status: 'pending'`
+  3. `backend/src/lib/social-worker.js` (new) — `startSocialWorker()`: polls `social_jobs WHERE status='pending'` every 30s, logs `[SOCIAL] Would post to facebook: {title} ({content_id})`, sets status `'sent'`. No real HTTP call.
+  4. `backend/src/index.js` — call `startSocialWorker()` on startup
+  5. `apps/cms-web/src/routes/ContentNew.tsx` — "Cross-post to Facebook" checkbox below expiry field. Posts `cross_post: true` when checked.
+  6. Migration applied to production.
+- **Files**: `backend/db/migrate_014.sql` (new), `backend/src/lib/social-worker.js` (new), `backend/src/routes/content.js`, `backend/src/index.js`, `apps/cms-web/src/routes/ContentNew.tsx`
+- **Role**: Feature Development — Agent 2
+- **Status**: TODO
+
+---
+
+### BL-039 — Responsive CMS: mobile breakpoints for on-floor operator use `[S]`
+- **What**: The CMS is desktop-only. A duty manager on the club floor needs to open it on an iPhone and make a quick update. Functional at 390px width — not pixel-perfect, just not broken.
+- **Acceptance criteria**:
+  1. `AppLayout.tsx` — nav collapses to hamburger or horizontal scroll below 768px. Links min 44px touch target.
+  2. `ContentNew.tsx` — split-panel stacks vertically below 768px (preview below form).
+  3. `CampaignList.tsx`, `PlaylistList.tsx`, `ScheduleList.tsx` — tables get `overflow-x: auto` wrapper, no layout break on small screens.
+  4. `TickerManager.tsx`, `VenueDashboard.tsx` — usable on mobile.
+  5. No new CSS framework. Media queries in inline styles or a single `apps/cms-web/src/styles/responsive.css` imported in `main.tsx`.
+  6. `pnpm --filter @clubhub/cms-web typecheck` passes.
+- **Files**: `apps/cms-web/src/components/layout/AppLayout.tsx`, `apps/cms-web/src/routes/ContentNew.tsx`, `apps/cms-web/src/routes/CampaignList.tsx`, `apps/cms-web/src/routes/PlaylistList.tsx`, `apps/cms-web/src/routes/ScheduleList.tsx`, `apps/cms-web/src/routes/TickerManager.tsx`, `apps/cms-web/src/routes/VenueDashboard.tsx`
+- **Role**: Feature Development — Agent 2
 - **Status**: TODO
 
 ---
