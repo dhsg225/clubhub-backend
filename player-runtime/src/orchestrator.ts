@@ -362,28 +362,46 @@ export class PlayerOrchestrator {
     const resolved = await this.playlistPoller.poll();
 
     if (resolved !== null) {
-      // Validation-first (ADR-002): only items with verified local assets enter enrichment.
-      // asset_path is served via UiServer /assets/ route — accessible to Chromium at runtime.
-      const enrichedItems = resolved.playlist
-        .filter(item => this.downloadManager.getLocalPath(item.content_id) !== null)
-        .map(item => ({
-          ...item,
-          asset_path: `${this.config.chromium_url}/assets/${item.content_id}`,
-        }));
+      // Validation-first (ADR-002): enrich items per zone.
+      // Data-driven items (template_type present) need no local asset — pass through as-is.
+      // Asset-based items must have a verified local asset before being sent to the player.
+      const enrichZoneItems = (items: typeof resolved.playlist) =>
+        items
+          .filter(item =>
+            item.template_type
+              ? true  // data-driven: no local asset needed
+              : this.downloadManager.getLocalPath(item.content_id) !== null,
+          )
+          .map(item => ({
+            ...item,
+            ...(item.template_type
+              ? {}  // data-driven: asset_path not used
+              : { asset_path: `${this.config.chromium_url}/assets/${item.content_id}` }),
+          }));
 
-      // G-07: defensive assertion — must never fire if validation-first gate is correct
-      if (enrichedItems.some(item => !item.asset_path)) {
-        console.error('[orchestrator] ASSERTION FAILED: enriched item has no asset_path after pre-validation gate');
+      // Build enriched zones map
+      const enrichedZones: Record<string, unknown[]> = {};
+      for (const [zoneName, zoneItems] of Object.entries(resolved.zones ?? {})) {
+        enrichedZones[zoneName] = enrichZoneItems(zoneItems);
+      }
+      // Ensure main zone always present (backward compat)
+      if (!enrichedZones['main']) {
+        enrichedZones['main'] = enrichZoneItems(resolved.playlist);
       }
 
-      if (enrichedItems.length === 0 && resolved.playlist.length > 0) {
+      const totalItems = Object.values(enrichedZones).reduce((s, a) => s + a.length, 0);
+      const totalResolved = resolved.playlist.length;
+      if (totalItems === 0 && totalResolved > 0) {
         console.warn(
-          `[orchestrator] 0/${resolved.playlist.length} playlist items have verified local assets` +
-          ` — assets may still be downloading`,
+          `[orchestrator] 0/${totalResolved} playlist items ready (assets downloading or data-driven empty)`,
         );
       }
 
-      this.emergencyRenderer.sendPlaylistUpdate(resolved.playlist_checksum, enrichedItems);
+      this.emergencyRenderer.sendPlaylistUpdate(
+        resolved.playlist_checksum,
+        resolved.screen_layout ?? 'fullscreen',
+        enrichedZones,
+      );
 
       const packet = {
         packet_id:        resolved._meta.correlation_id,
@@ -416,20 +434,38 @@ export class PlayerOrchestrator {
       const cachedPlaylist = this.playlistPoller.getLastPlaylist();
       if (cachedPlaylist !== null) {
         // G-08: offline fallback applies same validation-first enrichment as online path
-        const enrichedFallback = cachedPlaylist.playlist
-          .filter(item => this.downloadManager.getLocalPath(item.content_id) !== null)
-          .map(item => ({
-            ...item,
-            asset_path: `${this.config.chromium_url}/assets/${item.content_id}`,
-          }));
+        const enrichCachedItems = (items: typeof cachedPlaylist.playlist) =>
+          items
+            .filter(item =>
+              item.template_type
+                ? true
+                : this.downloadManager.getLocalPath(item.content_id) !== null,
+            )
+            .map(item => ({
+              ...item,
+              ...(item.template_type
+                ? {}
+                : { asset_path: `${this.config.chromium_url}/assets/${item.content_id}` }),
+            }));
+
+        const cachedZones: Record<string, unknown[]> = {};
+        for (const [zoneName, zoneItems] of Object.entries(cachedPlaylist.zones ?? {})) {
+          cachedZones[zoneName] = enrichCachedItems(zoneItems);
+        }
+        if (!cachedZones['main']) {
+          cachedZones['main'] = enrichCachedItems(cachedPlaylist.playlist);
+        }
+
+        const eligibleCount = Object.values(cachedZones).reduce((s, a) => s + a.length, 0);
         console.warn(
           `[orchestrator] Using cached playlist (offline fallback) ` +
           `checksum=${cachedPlaylist.playlist_checksum} ` +
-          `eligible=${enrichedFallback.length}/${cachedPlaylist.playlist.length}`,
+          `eligible=${eligibleCount}/${cachedPlaylist.playlist.length}`,
         );
         this.emergencyRenderer.sendPlaylistUpdate(
           cachedPlaylist.playlist_checksum,
-          enrichedFallback,
+          cachedPlaylist.screen_layout ?? 'fullscreen',
+          cachedZones,
         );
       } else {
         console.error('[orchestrator] No playlist available — player has no content');

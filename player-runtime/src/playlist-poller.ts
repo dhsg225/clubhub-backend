@@ -14,11 +14,13 @@ import * as crypto from 'node:crypto';
 
 export interface ResolvedPlaylist {
   readonly screen_id: string;
+  readonly screen_layout: string;
   readonly resolved_at: number;
   readonly resolution_level: number;
   readonly is_fallback: boolean;
   readonly playlist_checksum: string;
   readonly playlist: PlaylistItem[];
+  readonly zones: Record<string, PlaylistItem[]>;
   readonly _meta: {
     readonly correlation_id: string;
     readonly at_utc_ms: number;
@@ -29,6 +31,9 @@ export interface ResolvedPlaylist {
 export interface PlaylistItem {
   readonly content_id: string;
   readonly duration_ms: number;
+  readonly template_type?: string;
+  readonly data?: Record<string, unknown>;
+  readonly zone_name?: string;
   readonly weight: number;
   readonly source: number;
   readonly sponsored: boolean;
@@ -86,7 +91,15 @@ export class PlaylistPoller {
         return null;
       }
 
-      const resolved = await response.json() as ResolvedPlaylist;
+      const raw = await response.json() as ResolvedPlaylist & { zones?: Record<string, PlaylistItem[]> };
+
+      // Backward compat: if server doesn't return zones, derive from flat playlist
+      const zones: Record<string, PlaylistItem[]> = raw.zones ?? { main: raw.playlist ?? [] };
+      const resolved: ResolvedPlaylist = {
+        ...raw,
+        screen_layout: raw.screen_layout ?? 'fullscreen',
+        zones,
+      };
 
       // Verify PREVIEW: prefix never appears in production polling
       if (resolved.playlist_checksum.startsWith('PREVIEW:')) {
