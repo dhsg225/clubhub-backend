@@ -66,14 +66,14 @@ router.post('/', async (req, res) => {
       `INSERT INTO schedules
          (content_id, playlist_id, venue_id, screen_id, screen_group, priority,
           starts_at, ends_at, days_of_week, time_of_day_start, time_of_day_end,
-          duration, is_fallback, zone_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          duration, is_fallback, zone_name, tenant_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
       [
         content_id || null, playlist_id || null,
         venue_id, screen_id, screen_group, priority,
         starts_at, ends_at, days_of_week, time_of_day_start, time_of_day_end,
-        duration, is_fallback, zone_name,
+        duration, is_fallback, zone_name, req.tenantId,
       ]
     );
 
@@ -106,7 +106,8 @@ router.get('/', async (req, res) => {
   if (screen_id)  { conds.push(`s.screen_id  = $${vals.length + 1}`); vals.push(screen_id);  }
   if (venue_id)   { conds.push(`s.venue_id   = $${vals.length + 1}`); vals.push(venue_id);   }
 
-  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  conds.push(`s.tenant_id = $${vals.length + 1}`); vals.push(req.tenantId);
+  const where = `WHERE ${conds.join(' AND ')}`;
 
   try {
     const r = await pool.query(
@@ -126,7 +127,7 @@ router.get('/', async (req, res) => {
 // GET /schedules/:id
 router.get('/:id', async (req, res) => {
   try {
-    const r = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
+    const r = await pool.query('SELECT * FROM schedules WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);
   } catch (err) {
@@ -138,9 +139,9 @@ router.get('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     // Get schedule before deleting so we can bust the right cache entries
-    const sched = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
+    const sched = await pool.query('SELECT * FROM schedules WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
 
-    await pool.query('DELETE FROM schedules WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM schedules WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
 
     if (sched.rows.length) {
       const s = sched.rows[0];

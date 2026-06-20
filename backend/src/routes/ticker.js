@@ -11,8 +11,8 @@ router.get('/', async (req, res) => {
   if (!screen_id) return res.status(400).json({ error: 'screen_id required' });
   try {
     const r = await pool.query(
-      'SELECT * FROM ticker_items WHERE screen_id = $1 ORDER BY display_order ASC, created_at ASC',
-      [screen_id]
+      'SELECT * FROM ticker_items WHERE screen_id = $1 AND tenant_id = $2 ORDER BY display_order ASC, created_at ASC',
+      [screen_id, req.tenantId]
     );
     res.json(r.rows);
   } catch (err) {
@@ -28,9 +28,9 @@ router.post('/', async (req, res) => {
   if (text.length > 280) return res.status(400).json({ error: 'text must be 280 characters or fewer' });
   try {
     const r = await pool.query(
-      `INSERT INTO ticker_items (screen_id, text, display_order, active)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [screen_id, text, display_order ?? 0, active !== false]
+      `INSERT INTO ticker_items (screen_id, text, display_order, active, tenant_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [screen_id, text, display_order ?? 0, active !== false, req.tenantId]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -51,8 +51,8 @@ router.patch('/:id', async (req, res) => {
        SET text          = COALESCE($2, text),
            display_order = COALESCE($3, display_order),
            active        = COALESCE($4, active)
-       WHERE id = $1 RETURNING *`,
-      [req.params.id, text ?? null, display_order ?? null, active ?? null]
+       WHERE id = $1 AND tenant_id = $5 RETURNING *`,
+      [req.params.id, text ?? null, display_order ?? null, active ?? null, req.tenantId]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);
@@ -64,7 +64,7 @@ router.patch('/:id', async (req, res) => {
 // DELETE /ticker/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const r = await pool.query('DELETE FROM ticker_items WHERE id = $1 RETURNING id', [req.params.id]);
+    const r = await pool.query('DELETE FROM ticker_items WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.tenantId]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) {

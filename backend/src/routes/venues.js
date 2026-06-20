@@ -8,7 +8,7 @@ const router = express.Router();
 // GET /venues
 router.get('/', async (req, res) => {
   try {
-    const r = await pool.query('SELECT * FROM venues ORDER BY created_at ASC');
+    const r = await pool.query('SELECT * FROM venues WHERE tenant_id = $1 ORDER BY created_at ASC', [req.tenantId]);
     res.json(r.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 // GET /venues/:id
 router.get('/:id', async (req, res) => {
   try {
-    const r = await pool.query('SELECT * FROM venues WHERE id = $1', [req.params.id]);
+    const r = await pool.query('SELECT * FROM venues WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);
   } catch (err) {
@@ -28,12 +28,12 @@ router.get('/:id', async (req, res) => {
 
 // POST /venues
 router.post('/', async (req, res) => {
-  const { id, name, timezone = 'UTC' } = req.body;
+  const { id, name, timezone = 'UTC', tenant_id } = req.body;
   if (!id || !name) return res.status(400).json({ error: 'id and name required' });
   try {
     const r = await pool.query(
-      'INSERT INTO venues (id, name, timezone) VALUES ($1, $2, $3) RETURNING *',
-      [id, name, timezone]
+      'INSERT INTO venues (id, name, timezone, tenant_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [id, name, timezone, tenant_id || req.tenantId]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -50,8 +50,8 @@ router.patch('/:id', async (req, res) => {
       `UPDATE venues SET
          name     = COALESCE($1, name),
          timezone = COALESCE($2, timezone)
-       WHERE id = $3 RETURNING *`,
-      [name, timezone, req.params.id]
+       WHERE id = $3 AND tenant_id = $4 RETURNING *`,
+      [name, timezone, req.params.id, req.tenantId]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);

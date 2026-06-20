@@ -17,8 +17,8 @@ router.post('/', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'INSERT INTO content (template_type, data, expires_at) VALUES ($1, $2, $3) RETURNING *',
-      [template_type, JSON.stringify(cleanData), expires_at || null]
+      'INSERT INTO content (template_type, data, expires_at, tenant_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [template_type, JSON.stringify(cleanData), expires_at || null, req.tenantId]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -50,10 +50,11 @@ router.get('/', async (req, res) => {
         END AS status
       FROM content c
       LEFT JOIN schedules s ON s.content_id = c.id
-      WHERE (c.expires_at IS NULL OR c.expires_at > NOW())
+      WHERE c.tenant_id = $1
+        AND (c.expires_at IS NULL OR c.expires_at > NOW())
       GROUP BY c.id
       ORDER BY c.created_at DESC
-    `);
+    `, [req.tenantId]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -63,7 +64,7 @@ router.get('/', async (req, res) => {
 // GET /content/:id
 router.get('/:id', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM content WHERE id = $1', [req.params.id]);
+    const result = await pool.query('SELECT * FROM content WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
     if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -107,7 +108,7 @@ router.delete('/:id', async (req, res) => {
       [req.params.id]
     );
     console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'INFO', event: 'manifest.cache_bust', reason: 'content_deleted', content_id: req.params.id }));
-    await pool.query('DELETE FROM content WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM content WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
     res.json({ deleted: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

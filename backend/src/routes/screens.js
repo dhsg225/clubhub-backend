@@ -14,10 +14,10 @@ router.get('/', async (req, res) => {
   try {
     const r = venue_id
       ? await pool.query(
-          'SELECT * FROM screens WHERE venue_id = $1 ORDER BY created_at ASC',
-          [venue_id]
+          'SELECT * FROM screens WHERE venue_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
+          [venue_id, req.tenantId]
         )
-      : await pool.query('SELECT * FROM screens ORDER BY venue_id, created_at ASC');
+      : await pool.query('SELECT * FROM screens WHERE tenant_id = $1 ORDER BY venue_id, created_at ASC', [req.tenantId]);
     res.json(r.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
 // GET /screens/:id
 router.get('/:id', async (req, res) => {
   try {
-    const r = await pool.query('SELECT * FROM screens WHERE id = $1', [req.params.id]);
+    const r = await pool.query('SELECT * FROM screens WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);
   } catch (err) {
@@ -37,13 +37,13 @@ router.get('/:id', async (req, res) => {
 
 // POST /screens
 router.post('/', async (req, res) => {
-  const { id, venue_id, name, screen_group } = req.body;
+  const { id, venue_id, name, screen_group, tenant_id } = req.body;
   if (!id || !venue_id) return res.status(400).json({ error: 'id and venue_id required' });
   if (id.length > 100) return res.status(400).json({ error: 'Screen id must be 100 characters or fewer' });
   try {
     const r = await pool.query(
-      'INSERT INTO screens (id, venue_id, name, screen_group) VALUES ($1, $2, $3, $4) RETURNING *',
-      [id, venue_id, name ?? null, screen_group ?? null]
+      'INSERT INTO screens (id, venue_id, name, screen_group, tenant_id) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, venue_id, name ?? null, screen_group ?? null, tenant_id || req.tenantId]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -97,8 +97,8 @@ router.patch('/:id', async (req, res) => {
 
   try {
     const r = await pool.query(
-      'UPDATE screens SET screen_layout = $1 WHERE id = $2 RETURNING *',
-      [screen_layout, req.params.id]
+      'UPDATE screens SET screen_layout = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *',
+      [screen_layout, req.params.id, req.tenantId]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0]);

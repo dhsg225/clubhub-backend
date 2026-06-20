@@ -11,8 +11,9 @@ router.get('/', async (req, res) => {
              jsonb_array_length(items) AS card_count,
              created_at, updated_at
       FROM named_playlists
+      WHERE tenant_id = $1
       ORDER BY created_at DESC
-    `);
+    `, [req.tenantId]);
     res.json(result.rows);
   } catch (err) {
     console.error('GET /named_playlists:', err.message);
@@ -33,9 +34,9 @@ router.post('/', async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO named_playlists (name, ordering_rule, items)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [name.trim(), ordering_rule, JSON.stringify(items)]
+      `INSERT INTO named_playlists (name, ordering_rule, items, tenant_id)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name.trim(), ordering_rule, JSON.stringify(items), req.tenantId]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -48,8 +49,8 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT * FROM named_playlists WHERE id = $1',
-      [req.params.id]
+      'SELECT * FROM named_playlists WHERE id = $1 AND tenant_id = $2',
+      [req.params.id, req.tenantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
 
@@ -112,8 +113,8 @@ router.put('/:id', async (req, res) => {
 
   try {
     const result = await pool.query(
-      `UPDATE named_playlists SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
-      values
+      `UPDATE named_playlists SET ${updates.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+      [...values, req.tenantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(result.rows[0]);
@@ -126,7 +127,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /named_playlists/:id
 router.delete('/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM named_playlists WHERE id = $1', [req.params.id]);
+    await pool.query('DELETE FROM named_playlists WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
     res.json({ deleted: true });
   } catch (err) {
     console.error('DELETE /named_playlists/:id:', err.message);

@@ -383,7 +383,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   3. Verify: all existing rows have non-null tenant_id after migration
 - **Files**: `backend/db/migrate_013.sql` (new)
 - **Role**: Feature Development — Terminal Agent 1
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. tenants table, tenant_id columns + indexes + default backfill on all entity tables.
 
 ---
 
@@ -412,7 +412,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
   7. Smoke test: `GET /content` returns same rows as before (tenant filter uses default tenant, so no data loss)
 - **Files**: `backend/src/middleware/tenantContext.js` (new), `backend/src/index.js`, `backend/src/routes/content.js`, `backend/src/routes/named-playlists.js`, `backend/src/routes/schedules.js`, `backend/src/routes/venues.js`, `backend/src/routes/screens.js`, `backend/src/routes/resolve.js`, `backend/src/lib/manifestEngine.js`
 - **Role**: Feature Development — Terminal Agent 1
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Terminal Agent 1. tenantContext middleware, all routes hardened with AND tenant_id = $x, Pi resolve path exempt.
 
 ---
 
@@ -436,105 +436,37 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 ## Multi-Zone Layout Engine (BL-029 → BL-033) — do in order, each depends on the previous
 
 ### BL-029 — Zone-aware /resolve endpoint `[S]`
-- **What**: `/resolve/:screen_id` currently returns a flat `playlist` array. It must return per-zone playlists so the player knows which cards to show in which zone. The `schedules` table already has `zone_name`; `manifestEngine.js` already queries it — it just discards it. This item groups resolved items by zone and adds `screen_layout` to the response.
-- **Acceptance criteria**:
-  1. `manifestEngine.js` — query already returns `zone_name` per item (confirm or add `s.zone_name` to SELECT). Group result rows by `zone_name` before returning. Return shape: `{ items_by_zone: { main: [...], ticker: [...] }, manifest_hash, ... }` alongside existing flat `items` for backward compat.
-  2. `resolve.js` — response shape extended: add `screen_layout` (read from `screens.screen_layout` for the given screen_id, default `'fullscreen'`), add `zones` map keyed by zone_name: `{ main: [...items], ticker: [] }`. Keep existing `playlist` field (alias for `zones.main`) so `pnpm dev:local` still works.
-  3. Smoke test: `GET /resolve/screen-1` returns `{ zones: { main: [...] }, screen_layout: 'fullscreen', playlist: [...] }`.
-  4. No breaking change to player-runtime PlaylistPoller (it still reads `playlist` field).
 - **Files**: `backend/src/lib/manifestEngine.js`, `backend/src/routes/resolve.js`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Agent 3. zones map + screen_layout + template_type/data per item in /resolve response.
 
 ---
 
 ### BL-030 — player-runtime: zone-aware PlaylistPoller `[S]`
-- **What**: `PlaylistPoller` in `player-runtime/src/playlist-poller.ts` currently reads the flat `playlist` array and emits a single `PLAYLIST_UPDATE` to player-ui. It must read the `zones` map from the BL-029 response and emit a zone-keyed message so the layout engine knows which cards go where.
-- **Acceptance criteria**:
-  1. `playlist-poller.ts` — reads `zones` from `/resolve` response (falls back to `{ main: playlist }` if `zones` absent, for backward compat).
-  2. WebSocket message to player-ui changes shape to: `{ type: 'PLAYLIST_UPDATE', screen_layout: string, zones: { [zoneName]: PlaylistItem[] } }`.
-  3. `pnpm --filter @clubhub/player-runtime typecheck` passes (0 errors).
-  4. `pnpm dev:local` still starts and receives a PLAYLIST_UPDATE (verify in terminal output).
-- **Files**: `player-runtime/src/playlist-poller.ts`, `player-runtime/src/index.ts` (if message type defined there)
+- **Files**: `player-runtime/src/playlist-poller.ts`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Agent 3. PLAYLIST_UPDATE shape: { screen_layout, zones, corpus_data }.
 
 ---
 
 ### BL-031 — player-ui: Layout engine + CSS grid zones + container queries `[M]`
-- **What**: `player-ui` currently renders a single full-bleed card. Replace with a layout engine that: (1) reads `screen_layout` from the `PLAYLIST_UPDATE` message, (2) renders the correct CSS grid, (3) gives each zone a `container-type: inline-size` wrapper so card renderers reflow automatically, (4) runs an independent playlist rotation loop per zone.
-- **Layout CSS grids** (all zones are `position: relative; overflow: hidden`):
-  - `fullscreen`: `grid-template-areas: "main"` — 1×1, 100% height
-  - `split_horizontal`: `grid-template-areas: "main_left main_right" "ticker ticker"` — rows: `90% 10%`, cols: `1fr 1fr`
-  - `news_bar`: `grid-template-areas: "main" "ticker"` — rows: `90% 10%`, cols: `1fr`
-  - `quad`: `grid-template-areas: "top_left top_right" "bottom_left bottom_right"` — rows: `1fr 1fr`, cols: `1fr 1fr`
-- **Acceptance criteria**:
-  1. `apps/player-ui/src/layout-engine.ts` (new) — `renderLayout(container, screenLayout, zones)` builds the CSS grid and zone divs. Each zone div: `container-type: inline-size; container-name: zone; width: 100%; height: 100%; position: relative; overflow: hidden`.
-  2. Each zone with items in its playlist runs its own `setInterval` rotation, calling `renderCard()` with the current item.
-  3. `apps/player-ui/src/index.ts` updated — on `PLAYLIST_UPDATE`, call `renderLayout()` instead of the current direct `renderCard()` call.
-  4. Card renderers (`template-stubs.ts`) updated — replace `vw`/`vh` viewport units with `cqw`/`cqh` container query units where used for font-size / spacing so cards scale correctly inside sub-screen zones, not the full viewport.
-  5. `fullscreen` layout: identical behaviour to today — one zone (`main`), full screen, single card rotation. No visual regression.
-  6. `pnpm --filter @clubhub/player-ui build` passes.
-  7. `pnpm dev:local` loads, receives PLAYLIST_UPDATE, renders `fullscreen` layout with `main` zone playing correctly.
 - **Files**: `apps/player-ui/src/layout-engine.ts` (new), `apps/player-ui/src/index.ts`, `apps/player-ui/src/template-stubs.ts`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Agent 3. CSS grid per layout, per-zone rotation loops, cqw container units.
 
 ---
 
 ### BL-032 — Widget Registry + Layout Definitions + Clock + DateDisplay `[M]`
-- **What**: Establish the Widget Registry pattern (D-017) so all future widgets plug in without touching the layout engine. Then implement Clock and DateDisplay as the first two registered widgets. Replaces the hardcoded injection approach from the original BL-032 spec.
-- **New files**:
-  - `apps/player-ui/src/widget-registry.ts` — `WidgetInstance` interface, `registerWidget()`, `instantiateWidget()`
-  - `apps/player-ui/src/layout-definitions.ts` — `LAYOUTS` constant with all 4 layout definitions (see D-017 for full schema and slot values)
-  - `apps/player-ui/src/widgets/clock.ts` — registers itself as `'clock'`; factory returns `WidgetInstance` that mounts a live HH:MM:SS display, updates every 1s via `setInterval`, calls `destroy()` to clear interval
-  - `apps/player-ui/src/widgets/date-display.ts` — registers itself as `'date_display'`; factory returns `WidgetInstance` showing "Friday 20 June" format, updates at midnight
-- **Edit**: `apps/player-ui/src/layout-engine.ts`
-  - Add `corpusData: Record<string, unknown>` param to `renderLayout()`
-  - Import widget files (triggers self-registration)
-  - After building grid + playlist rotations, iterate `layoutDef.widget_slots`:
-    - If `position === 'left-fixed'`: split zone div — create a `width: {slot.width}px; flex-shrink: 0` left sub-div and a `flex: 1` right sub-div
-    - Resolve config: `{ items: corpusData[slot.corpus_key] ?? [] }` (or `{}` for static widgets)
-    - Call `instantiateWidget(slot.widget, subDiv, config)`
-    - Store all instances in an array; call `destroy()` on each before next `renderLayout()` call
-  - Update `index.ts` call site to pass `corpusData` (use `{}` for now — BL-033 fills it)
-- **Widget styling**: white text, monospace for clock, vertically centred in their sub-div, `font-size: clamp(0.7rem, 1.6cqw, 1rem)`, no overflow bleed
-- **Acceptance criteria**:
-  1. `widget-registry.ts` exports `WidgetInstance`, `registerWidget`, `instantiateWidget`
-  2. `layout-definitions.ts` exports `LAYOUTS` with correct slot definitions for all 4 layouts per D-017
-  3. Clock widget: mounts, ticks every second, `destroy()` clears the interval
-  4. `news_bar` layout → ticker zone left 120px shows live clock; right side is empty (BL-033 will fill it)
-  5. No hardcoded widget logic anywhere in `layout-engine.ts` — it only reads `LAYOUTS` and calls `instantiateWidget()`
-  6. `pnpm --filter @clubhub/player-ui build` passes
-- **Files**: `widget-registry.ts` (new), `layout-definitions.ts` (new), `widgets/clock.ts` (new), `widgets/date-display.ts` (new), `layout-engine.ts`, `index.ts`
+- **Files**: `widget-registry.ts`, `layout-definitions.ts`, `widgets/clock.ts`, `widgets/date-display.ts`, `layout-engine.ts`
 - **Role**: Feature Development — Agent 3
-- **Status**: TODO
+- **Status**: DONE 2026-06-20 — Agent 3. Widget Registry (D-017), LAYOUTS definitions, Clock + DateDisplay self-registering widgets.
 
 ---
 
 ### BL-033 — TickerScroll widget + ticker content authoring `[M]`
-- **What**: Third registered widget. Operators author text strings for the ticker in the CMS; these are delivered via `/resolve` under `ticker_items`; the layout engine passes them to the `ticker_scroll` widget via the registry's `corpus_key` mechanism (D-017). The widget is source-agnostic — it receives `string[]` and scrolls them regardless of origin. Future sources (regional news, sponsored text) are appended to this array server-side without touching the widget.
-- **DB + backend**:
-  - `migrate_012.sql`: `CREATE TABLE ticker_items (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, screen_id VARCHAR(64) REFERENCES screens(id) ON DELETE CASCADE, text VARCHAR(280) NOT NULL, display_order INTEGER DEFAULT 0, active BOOLEAN DEFAULT true, created_at TIMESTAMPTZ DEFAULT NOW())`
-  - `backend/src/routes/ticker.js` (new, CommonJS): `GET /ticker?screen_id=:id`, `POST /ticker`, `PATCH /ticker/:id`, `DELETE /ticker/:id`
-  - `backend/src/index.js`: mount ticker router
-  - `backend/src/routes/resolve.js`: add `ticker_items: string[]` to response (SELECT text FROM ticker_items WHERE screen_id = $1 AND active = true ORDER BY display_order)
-- **Player widget**:
-  - `apps/player-ui/src/widgets/ticker-scroll.ts` (new) — registers itself as `'ticker_scroll'`
-  - Factory receives `config.items: string[]`; if empty → returns no-op WidgetInstance (empty container, clock fills full ticker zone)
-  - Render: inner div with items joined by ` · `, CSS `@keyframes` horizontal scroll using `transform: translateX`, hardware-accelerated. Speed ~80px/s — calculate `animation-duration` from total string length. `animation-iteration-count: infinite; animation-timing-function: linear`
-  - Returns `WidgetInstance` with `destroy()` (removes element) and `update(items)` (replaces text, recalculates duration)
-- **CMS authoring**:
-  - `apps/cms-web/src/routes/TickerManager.tsx` (new) — `/ticker` route. Screen selector at top. Table: text (inline editable), active toggle, display_order up/down, delete. "Add item" → text input + save. 280 char limit shown. No expiry.
-  - `apps/cms-web/src/components/layout/AppLayout.tsx`: add "Ticker" nav link
-  - `apps/cms-web/src/App.tsx`: wire `/ticker` lazy route
-- **Acceptance criteria**:
-  1. `ticker_scroll` widget registered; `LAYOUTS` slot `corpus_key: 'ticker_items'` feeds it automatically via layout engine
-  2. Operator adds text in `/ticker` CMS → `GET /resolve/screen-1` returns `ticker_items: [...]`
-  3. `news_bar` screen → ticker zone: clock left 120px + scrolling text right. Smooth, loops, no reflow
-  4. Empty `ticker_items` → clock fills full ticker zone, no broken strip
-  5. `pnpm --filter @clubhub/cms-web typecheck` passes; `pnpm --filter @clubhub/player-ui build` passes
-- **Files**: `backend/db/migrate_012.sql` (new), `backend/src/routes/ticker.js` (new), `backend/src/routes/resolve.js`, `backend/src/index.js`, `apps/player-ui/src/widgets/ticker-scroll.ts` (new), `apps/cms-web/src/routes/TickerManager.tsx` (new), `apps/cms-web/src/App.tsx`, `apps/cms-web/src/components/layout/AppLayout.tsx`
+- **Files**: `migrate_012.sql`, `ticker.js`, `resolve.js`, `widgets/ticker-scroll.ts`, `TickerManager.tsx`
+- **Role**: Feature Development — Agent 3
+- **Status**: DONE 2026-06-20 — Agent 3. ticker_items table, CRUD API, /resolve delivery, ticker_scroll widget, TickerManager CMS. Smoke test: ticker_items flows through /resolve to player.
 - **Role**: Feature Development — Agent 3
 - **Status**: TODO
 
