@@ -293,6 +293,38 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ---
 
+### BL-027 — Real renderers for event_banner, sponsor_banner, menu_board, daily_specials `[M]`
+- **What**: Four template types are authored via the card form but still display as coloured STUB placeholders on screen. Promote each to a real renderer in two places: (1) `ContentPreview.tsx` — the CMS preview panel, and (2) `template-stubs.ts` — the Pi player display in Chromium.
+
+  **Data shapes** (from `ContentNew.tsx`):
+  - `event_banner` → `{ event_name: string, date: string, time: string, description: string }`
+  - `sponsor_banner` → `{ sponsor_name: string, tagline: string, tier: 'Platinum'|'Gold'|'Silver' }`
+  - `menu_board` → `{ sections: [{ section_title: string, items: [{ name: string, price: string }] }] }` (up to 2 sections × 4 items)
+  - `daily_specials` → `{ headline: string, items: [{ dish_name: string, price: string }] }` (up to 5 items)
+
+  **Visual design per type** (full-bleed 16:9, no images, text-only):
+  - `event_banner`: dark background `#0f172a`. Event name in large bold white at top-centre. Date + time side by side in a highlighted pill or large accent block in the middle (accent colour `#EA580C`). Description in smaller text below. No STUB watermark.
+  - `sponsor_banner`: dark background `#0f172a`. Sponsor name large and centred. Tier badge below the name (`Platinum` = `#e5e4e2`, `Gold` = `#FFD700`, `Silver` = `#C0C0C0`) as a coloured chip with tier label. Tagline in lighter text at bottom. No STUB watermark.
+  - `menu_board`: dark navy `#0f172a`. Section titles as white uppercase row headers with bottom border. Items listed below each header: item name left-aligned, price right-aligned. If 2 sections, render them side by side (two columns). No STUB watermark.
+  - `daily_specials`: dark background `#1a0a0a`. `headline` large at top (e.g. "TODAY'S SPECIALS") in accent red `#DC2626`. Items as a list below: dish name left, price right, separator line between items. No STUB watermark.
+
+- **Acceptance criteria**:
+  1. `ContentPreview.tsx` — `TemplateStub()` dispatches to a dedicated renderer component for each of the 4 types (same pattern as `PromoSlideRenderer`). Generic coloured-box stub only shown for unknown/future types.
+  2. `template-stubs.ts` — `renderTemplateStub()` has DOM-built branches for all 4 types (same pattern as the existing `promo_slide` branch). No STUB watermark text. Falls through to generic stub only for unknown types.
+  3. Visuals are consistent between ContentPreview (React) and template-stubs (DOM) — same layout, same colours, same field ordering.
+  4. Empty/missing fields degrade gracefully: omit the element, do not show `undefined` or blank label.
+  5. `pnpm --filter @clubhub/cms-web typecheck` passes (0 errors).
+  6. `pnpm --filter @clubhub/player-ui build` passes.
+
+- **Files**:
+  - `apps/cms-web/src/routes/ContentPreview.tsx` — add 4 renderer components, wire into `TemplateStub()`
+  - `apps/player-ui/src/template-stubs.ts` — add 4 DOM renderer branches
+
+- **Role**: Feature Development — Agent 3
+- **Status**: DONE 2026-06-20 — Agent 3
+
+---
+
 ## Completed
 
 | Item | Date | Summary |
@@ -308,3 +340,4 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 | BL-024 | 2026-06-20 | Zone support complete. migrate_010.sql (zone_name on schedules + layout_template on screens), schedules.js POST accepts zone_name, screens.js PATCH /:id added, ScheduleCreator.tsx layout+zone section, VenueDashboard.tsx layout column with inline select + optimistic UI + error revert, api-client.ts patch() added. 118 modules, 0 typecheck errors. Deployed to production. — Agent 3 |
 | BL-025 | 2026-06-20 | Corpus delivery wired. manifestEngine.js: split single INNER JOIN query into Query A (content-based) + Query B (playlist-based via LATERAL jsonb_array_elements), merged+sorted by priority. New backend/src/routes/resolve.js: GET /resolve/:screen_id transforms getManifest() into ResolvedPlaylist shape. Mounted in index.js with 120/60s rate limit. Deployed to production. Smoke test: /resolve/screen-1 returns 2-item playlist with checksum. — Agent 3 |
 | BL-026 | 2026-06-20 | Local preview environment. player-runtime/.env.local with DEV_NO_CHROMIUM=true + production CMS_API_URL + 15s poll. index.ts chromium.start() guarded by DEV_NO_CHROMIUM. "dev:local" script using tsx --env-file. player-ui built (dist/index.js). End-to-end verified: pnpm dev:local → ui-server on :3001 → playlist updated checksum=7574cc7e level=1 within 15s. — Agent 3 |
+| BL-027 | 2026-06-20 | Real renderers for event_banner, sponsor_banner, menu_board, daily_specials. ContentPreview.tsx: 4 React renderer components added (EventBannerRenderer, SponsorBannerRenderer, MenuBoardRenderer, DailySpecialsRenderer), TemplateStub dispatches all 4. template-stubs.ts: 4 DOM early-return branches added before generic stub fallback. Visuals consistent between CMS and player. 0 typecheck errors, player-ui build PASS. — Agent 3 |

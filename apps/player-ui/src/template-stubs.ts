@@ -81,6 +81,161 @@ export function renderTemplateStub(
     return;
   }
 
+  // event_banner: real renderer
+  if (templateType === 'event_banner') {
+    const eventName   = typeof data.event_name   === 'string' ? data.event_name   : '';
+    const date        = typeof data.date         === 'string' ? data.date         : '';
+    const time        = typeof data.time         === 'string' ? data.time         : '';
+    const description = typeof data.description  === 'string' ? data.description  : '';
+    const dateTime    = [date, time].filter(Boolean).join('  ·  ');
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'width:100%;height:100%;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:8%;overflow:hidden;';
+
+    if (eventName) {
+      const nameEl = document.createElement('div');
+      nameEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(2rem,6vw,5rem);font-weight:800;letter-spacing:-0.02em;text-align:center;line-height:1.1;max-width:80%;margin-bottom:6%;';
+      nameEl.textContent = eventName;
+      wrapper.appendChild(nameEl);
+    }
+    if (dateTime) {
+      const dtEl = document.createElement('div');
+      dtEl.style.cssText = 'color:#EA580C;font-family:system-ui,sans-serif;font-size:clamp(1rem,3vw,2.2rem);font-weight:700;text-align:center;margin-bottom:5%;letter-spacing:0.04em;';
+      dtEl.textContent = dateTime;
+      wrapper.appendChild(dtEl);
+    }
+    if (description) {
+      const descEl = document.createElement('div');
+      descEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,2vw,1.4rem);font-weight:400;text-align:center;line-height:1.5;max-width:65%;opacity:0.7;';
+      descEl.textContent = description;
+      wrapper.appendChild(descEl);
+    }
+
+    container.appendChild(wrapper);
+    return;
+  }
+
+  // sponsor_banner: real renderer
+  if (templateType === 'sponsor_banner') {
+    const sponsorName = typeof data.sponsor_name === 'string' ? data.sponsor_name : '';
+    const tagline     = typeof data.tagline      === 'string' ? data.tagline      : '';
+    const tier        = typeof data.tier         === 'string' ? data.tier         : '';
+    const tierColors: Record<string, string> = { Platinum: '#e5e4e2', Gold: '#FFD700', Silver: '#C0C0C0' };
+    const tierColor = tierColors[tier] ?? '#e5e4e2';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'width:100%;height:100%;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:8%;overflow:hidden;';
+
+    if (sponsorName) {
+      const nameEl = document.createElement('div');
+      nameEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(2.5rem,7vw,5.5rem);font-weight:800;letter-spacing:-0.02em;text-align:center;line-height:1.1;max-width:80%;margin-bottom:5%;';
+      nameEl.textContent = sponsorName;
+      wrapper.appendChild(nameEl);
+    }
+    if (tier) {
+      const tierEl = document.createElement('div');
+      tierEl.style.cssText = `background:${tierColor};color:#111;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,1.8vw,1.2rem);font-weight:700;padding:0.4em 1.2em;border-radius:999px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6%;`;
+      tierEl.textContent = tier;
+      wrapper.appendChild(tierEl);
+    }
+    if (tagline) {
+      const tagEl = document.createElement('div');
+      tagEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.8rem,2.2vw,1.5rem);font-weight:400;text-align:center;line-height:1.4;max-width:60%;opacity:0.7;';
+      tagEl.textContent = tagline;
+      wrapper.appendChild(tagEl);
+    }
+
+    container.appendChild(wrapper);
+    return;
+  }
+
+  // menu_board: real renderer
+  if (templateType === 'menu_board') {
+    const rawSections = Array.isArray(data.sections) ? data.sections as { section_title?: string; items?: { name?: string; price?: string }[] }[] : [];
+    const sections = rawSections.filter(s => s && typeof s === 'object');
+    const isTwoCol = sections.length >= 2;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'width:100%;height:100%;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:6% 8%;overflow:hidden;';
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;flex-direction:row;gap:4%;width:100%;max-width:1400px;';
+
+    for (const section of sections) {
+      const col = document.createElement('div');
+      col.style.cssText = `flex:0 0 ${isTwoCol ? '48%' : '100%'};min-width:0;`;
+
+      if (section.section_title) {
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = 'color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.8rem,2vw,1.4rem);font-weight:700;text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:0.5em;margin-bottom:0.75em;';
+        titleEl.textContent = section.section_title;
+        col.appendChild(titleEl);
+      }
+
+      const items = section.items ?? [];
+      items.forEach((it, ii) => {
+        const itemRow = document.createElement('div');
+        itemRow.style.cssText = `display:flex;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.65rem,1.4vw,1rem);padding:0.4em 0;${ii < items.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.1);' : ''}`;
+        if (it.name) {
+          const nameEl = document.createElement('span');
+          nameEl.textContent = it.name;
+          itemRow.appendChild(nameEl);
+        }
+        if (it.price) {
+          const priceEl = document.createElement('span');
+          priceEl.style.cssText = 'opacity:0.85;';
+          priceEl.textContent = it.price;
+          itemRow.appendChild(priceEl);
+        }
+        col.appendChild(itemRow);
+      });
+
+      row.appendChild(col);
+    }
+
+    wrapper.appendChild(row);
+    container.appendChild(wrapper);
+    return;
+  }
+
+  // daily_specials: real renderer
+  if (templateType === 'daily_specials') {
+    const headline = typeof data.headline === 'string' ? data.headline : '';
+    const rawItems = Array.isArray(data.items) ? data.items as { dish_name?: string; price?: string }[] : [];
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'width:100%;height:100%;background:#1a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:6% 10%;overflow:hidden;';
+
+    if (headline) {
+      const headEl = document.createElement('div');
+      headEl.style.cssText = 'color:#DC2626;font-family:system-ui,sans-serif;font-size:clamp(1.5rem,4.5vw,3.5rem);font-weight:800;text-transform:uppercase;text-align:center;letter-spacing:0.06em;margin-bottom:6%;';
+      headEl.textContent = headline;
+      wrapper.appendChild(headEl);
+    }
+
+    const list = document.createElement('div');
+    list.style.cssText = 'width:100%;max-width:900px;';
+    rawItems.forEach((it, ii) => {
+      const itemRow = document.createElement('div');
+      itemRow.style.cssText = `display:flex;justify-content:space-between;color:#fff;font-family:system-ui,sans-serif;font-size:clamp(0.75rem,2vw,1.3rem);padding:0.55em 0;${ii < rawItems.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.12);' : ''}`;
+      if (it.dish_name) {
+        const nameEl = document.createElement('span');
+        nameEl.textContent = it.dish_name;
+        itemRow.appendChild(nameEl);
+      }
+      if (it.price) {
+        const priceEl = document.createElement('span');
+        priceEl.style.cssText = 'opacity:0.85;';
+        priceEl.textContent = it.price;
+        itemRow.appendChild(priceEl);
+      }
+      list.appendChild(itemRow);
+    });
+    wrapper.appendChild(list);
+    container.appendChild(wrapper);
+    return;
+  }
+
   const bg = STUB_COLORS[templateType] ?? '#4B5563';
 
   const wrapper = document.createElement('div');

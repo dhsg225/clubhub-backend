@@ -59,9 +59,11 @@ function ContentPreview(): JSX.Element {
 }
 
 function TemplateStub({ item }: { item: ContentItem }): JSX.Element {
-  if (item.template_type === 'promo_slide') {
-    return <PromoSlideRenderer item={item} />;
-  }
+  if (item.template_type === 'promo_slide')    return <PromoSlideRenderer item={item} />;
+  if (item.template_type === 'event_banner')   return <EventBannerRenderer item={item} />;
+  if (item.template_type === 'sponsor_banner') return <SponsorBannerRenderer item={item} />;
+  if (item.template_type === 'menu_board')     return <MenuBoardRenderer item={item} />;
+  if (item.template_type === 'daily_specials') return <DailySpecialsRenderer item={item} />;
 
   const bg = STUB_COLORS[item.template_type] ?? '#4B5563';
   const data = item.data ?? {};
@@ -209,6 +211,124 @@ function PromoSlideRenderer({ item }: { item: ContentItem }): JSX.Element {
           No content — fill in title and subtitle in the form
         </div>
       )}
+    </div>
+  );
+}
+
+function EventBannerRenderer({ item }: { item: ContentItem }): JSX.Element {
+  const d = item.data ?? {};
+  const eventName   = typeof d.event_name   === 'string' ? d.event_name   : '';
+  const date        = typeof d.date         === 'string' ? d.date         : '';
+  const time        = typeof d.time         === 'string' ? d.time         : '';
+  const description = typeof d.description  === 'string' ? d.description  : '';
+  const dateTime    = [date, time].filter(Boolean).join('  ·  ');
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '8%', boxSizing: 'border-box' }}>
+      {eventName && (
+        <div style={{ color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(2rem, 6vw, 5rem)', fontWeight: 800, letterSpacing: '-0.02em', textAlign: 'center', lineHeight: 1.1, maxWidth: '80%', marginBottom: '6%' }}>
+          {eventName}
+        </div>
+      )}
+      {dateTime && (
+        <div style={{ color: '#EA580C', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(1rem, 3vw, 2.2rem)', fontWeight: 700, textAlign: 'center', marginBottom: '5%', letterSpacing: '0.04em' }}>
+          {dateTime}
+        </div>
+      )}
+      {description && (
+        <div style={{ color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(0.75rem, 2vw, 1.4rem)', fontWeight: 400, textAlign: 'center', lineHeight: 1.5, maxWidth: '65%', opacity: 0.7 }}>
+          {description}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SponsorBannerRenderer({ item }: { item: ContentItem }): JSX.Element {
+  const d = item.data ?? {};
+  const sponsorName = typeof d.sponsor_name === 'string' ? d.sponsor_name : '';
+  const tagline     = typeof d.tagline      === 'string' ? d.tagline      : '';
+  const tier        = typeof d.tier         === 'string' ? d.tier         : '';
+
+  const TIER_COLORS: Record<string, string> = { Platinum: '#e5e4e2', Gold: '#FFD700', Silver: '#C0C0C0' };
+  const tierColor = TIER_COLORS[tier] ?? '#e5e4e2';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '8%', boxSizing: 'border-box' }}>
+      {sponsorName && (
+        <div style={{ color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(2.5rem, 7vw, 5.5rem)', fontWeight: 800, letterSpacing: '-0.02em', textAlign: 'center', lineHeight: 1.1, maxWidth: '80%', marginBottom: '5%' }}>
+          {sponsorName}
+        </div>
+      )}
+      {tier && (
+        <div style={{ backgroundColor: tierColor, color: '#111', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(0.75rem, 1.8vw, 1.2rem)', fontWeight: 700, padding: '0.4em 1.2em', borderRadius: '999px', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6%' }}>
+          {tier}
+        </div>
+      )}
+      {tagline && (
+        <div style={{ color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(0.8rem, 2.2vw, 1.5rem)', fontWeight: 400, textAlign: 'center', lineHeight: 1.4, maxWidth: '60%', opacity: 0.7 }}>
+          {tagline}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuBoardRenderer({ item }: { item: ContentItem }): JSX.Element {
+  const d = item.data ?? {};
+  const rawSections = Array.isArray(d.sections) ? d.sections as { section_title?: string; items?: { name?: string; price?: string }[] }[] : [];
+  const sections = rawSections.filter(s => s && typeof s === 'object');
+  const isTwoCol = sections.length >= 2;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '6% 8%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: '4%', width: '100%', maxWidth: '1400px' }}>
+        {sections.map((section, si) => (
+          <div key={si} style={{ flex: isTwoCol ? '0 0 48%' : '0 0 100%', minWidth: 0 }}>
+            {section.section_title && (
+              <div style={{ color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(0.8rem, 2vw, 1.4rem)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid rgba(255,255,255,0.3)', paddingBottom: '0.5em', marginBottom: '0.75em' }}>
+                {section.section_title}
+              </div>
+            )}
+            {(section.items ?? []).map((it, ii) => (
+              <div key={ii} style={{ display: 'flex', justifyContent: 'space-between', color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(0.65rem, 1.4vw, 1rem)', padding: '0.4em 0', borderBottom: ii < (section.items?.length ?? 0) - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+                {it.name && <span>{it.name}</span>}
+                {it.price && <span style={{ opacity: 0.85 }}>{it.price}</span>}
+              </div>
+            ))}
+          </div>
+        ))}
+        {sections.length === 0 && (
+          <div style={{ color: '#fff', opacity: 0.4, fontFamily: 'system-ui', textAlign: 'center', width: '100%' }}>No sections</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DailySpecialsRenderer({ item }: { item: ContentItem }): JSX.Element {
+  const d = item.data ?? {};
+  const headline = typeof d.headline === 'string' ? d.headline : '';
+  const rawItems = Array.isArray(d.items) ? d.items as { dish_name?: string; price?: string }[] : [];
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#1a0a0a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '6% 10%', boxSizing: 'border-box' }}>
+      {headline && (
+        <div style={{ color: '#DC2626', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(1.5rem, 4.5vw, 3.5rem)', fontWeight: 800, textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.06em', marginBottom: '6%' }}>
+          {headline}
+        </div>
+      )}
+      <div style={{ width: '100%', maxWidth: '900px' }}>
+        {rawItems.map((it, ii) => (
+          <div key={ii} style={{ display: 'flex', justifyContent: 'space-between', color: '#fff', fontFamily: 'system-ui,sans-serif', fontSize: 'clamp(0.75rem, 2vw, 1.3rem)', padding: '0.55em 0', borderBottom: ii < rawItems.length - 1 ? '1px solid rgba(255,255,255,0.12)' : 'none' }}>
+            {it.dish_name && <span>{it.dish_name}</span>}
+            {it.price && <span style={{ opacity: 0.85 }}>{it.price}</span>}
+          </div>
+        ))}
+        {rawItems.length === 0 && (
+          <div style={{ color: '#fff', opacity: 0.4, textAlign: 'center' }}>No items</div>
+        )}
+      </div>
     </div>
   );
 }
