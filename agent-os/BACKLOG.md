@@ -344,6 +344,95 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 
 ---
 
+## Multi-Tenancy (BL-034 → BL-036) — do in order, each depends on the previous
+
+### BL-034 — DB: tenants table + tenant_id columns + indexes + backfill `[M]`
+- **What**: Create the `tenants` master table and add `tenant_id` to every entity table per D-018. Seed a default tenant and backfill all existing rows. Applies to production.
+- **Acceptance criteria**:
+  1. `backend/db/migrate_013.sql`:
+     ```sql
+     CREATE TABLE IF NOT EXISTS tenants (
+       id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+       name VARCHAR(100) NOT NULL,
+       slug VARCHAR(50) UNIQUE NOT NULL,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     );
+     INSERT INTO tenants (name, slug) VALUES ('ClubHub Default', 'default') ON CONFLICT DO NOTHING;
+
+     ALTER TABLE venues ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id) ON DELETE RESTRICT;
+     ALTER TABLE screens ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id) ON DELETE RESTRICT;
+     ALTER TABLE content ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+     ALTER TABLE named_playlists ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+     ALTER TABLE schedules ADD COLUMN IF NOT EXISTS tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+
+     -- Backfill all existing rows to the default tenant
+     UPDATE venues SET tenant_id = (SELECT id FROM tenants WHERE slug = 'default') WHERE tenant_id IS NULL;
+     UPDATE screens SET tenant_id = (SELECT id FROM tenants WHERE slug = 'default') WHERE tenant_id IS NULL;
+     UPDATE content SET tenant_id = (SELECT id FROM tenants WHERE slug = 'default') WHERE tenant_id IS NULL;
+     UPDATE named_playlists SET tenant_id = (SELECT id FROM tenants WHERE slug = 'default') WHERE tenant_id IS NULL;
+     UPDATE schedules SET tenant_id = (SELECT id FROM tenants WHERE slug = 'default') WHERE tenant_id IS NULL;
+
+     -- Indexes for query performance
+     CREATE INDEX IF NOT EXISTS idx_venues_tenant ON venues(tenant_id);
+     CREATE INDEX IF NOT EXISTS idx_screens_tenant ON screens(tenant_id);
+     CREATE INDEX IF NOT EXISTS idx_content_tenant ON content(tenant_id);
+     CREATE INDEX IF NOT EXISTS idx_playlists_tenant ON named_playlists(tenant_id);
+     CREATE INDEX IF NOT EXISTS idx_schedules_tenant ON schedules(tenant_id);
+     ```
+  2. Migration applied to production DB cleanly (idempotent — IF NOT EXISTS throughout)
+  3. Verify: all existing rows have non-null tenant_id after migration
+- **Files**: `backend/db/migrate_013.sql` (new)
+- **Role**: Feature Development — Terminal Agent 1
+- **Status**: TODO
+
+---
+
+### BL-035 — Backend: tenantContext middleware + full query hardening `[M]`
+- **What**: Add `tenantContext.js` middleware that resolves `req.tenantId` on every request. Update every route handler and `manifestEngine.js` to append `AND tenant_id = $x` to all queries. Uses `MULTI_TENANT_ENFORCE` flag — safe to ship before real JWT auth exists.
+- **Acceptance criteria**:
+  1. `backend/src/middleware/tenantContext.js` (new):
+     ```js
+     // When MULTI_TENANT_ENFORCE=true: extract tenant_id from req.user.tenant_id (JWT claim), reject 403 if absent
+     // When MULTI_TENANT_ENFORCE=false (default): use process.env.DEFAULT_TENANT_ID
+     //   (seed this from DB on startup — query tenants WHERE slug='default', cache the UUID)
+     module.exports = { injectTenantContext, loadDefaultTenantId }
+     ```
+  2. `backend/src/index.js` — call `loadDefaultTenantId()` at startup (before routes mount), apply `injectTenantContext` middleware to all routes except `/health`
+  3. **Routes to update** (add `AND tenant_id = $n` to every SELECT/INSERT/UPDATE/DELETE):
+     - `backend/src/routes/content.js` — GET list, GET by id, POST (insert with tenant_id), PATCH, DELETE
+     - `backend/src/routes/named-playlists.js` — all 5 endpoints
+     - `backend/src/routes/schedules.js` — GET list, POST, GET by id
+     - `backend/src/routes/venues.js` — GET list, POST, GET by id
+     - `backend/src/routes/screens.js` — GET list, GET by id, PATCH, enroll (INSERT with tenant_id)
+     - `backend/src/routes/resolve.js` — resolve screen → look up screen's tenant_id from screen record, pass through to manifestEngine
+     - `backend/src/lib/manifestEngine.js` — both Query A and Query B add `AND c.tenant_id = $n` and `AND s.tenant_id = $n`
+  4. **Pi resolve path**: `GET /resolve/:screen_id` is exempt from JWT requirement even when MULTI_TENANT_ENFORCE=true — it resolves tenant_id from the screen record itself (`SELECT tenant_id FROM screens WHERE id = $1`). No JWT needed on the device.
+  5. `backend/.env` gets `MULTI_TENANT_ENFORCE=false` and `DEFAULT_TENANT_ID=` (populated by startup loader)
+  6. Smoke test: `GET /resolve/screen-1` still returns correct playlist with no regression
+  7. Smoke test: `GET /content` returns same rows as before (tenant filter uses default tenant, so no data loss)
+- **Files**: `backend/src/middleware/tenantContext.js` (new), `backend/src/index.js`, `backend/src/routes/content.js`, `backend/src/routes/named-playlists.js`, `backend/src/routes/schedules.js`, `backend/src/routes/venues.js`, `backend/src/routes/screens.js`, `backend/src/routes/resolve.js`, `backend/src/lib/manifestEngine.js`
+- **Role**: Feature Development — Terminal Agent 1
+- **Status**: TODO
+
+---
+
+### BL-036 — Backend: tenants CRUD API `[S]`
+- **What**: Admin-only endpoints for managing tenants. No CMS UI surface yet — these are called programmatically or via curl to onboard a new operator organisation.
+- **Acceptance criteria**:
+  1. `backend/src/routes/tenants.js` (new, CommonJS):
+     - `GET /tenants` — list all tenants (id, name, slug, created_at)
+     - `POST /tenants` — create `{ name, slug }` → returns new tenant with id
+     - `GET /tenants/:id` — fetch single tenant
+     - `PATCH /tenants/:id` — update name and/or slug
+  2. Mounted in `backend/src/index.js` under `/tenants`
+  3. When `MULTI_TENANT_ENFORCE=true`, these endpoints require an `X-Admin-Key` header matching `process.env.ADMIN_KEY`. When false, open (dev convenience).
+  4. `POST /venues` and `POST /screens` updated to accept optional `tenant_id` in body — if omitted, use `req.tenantId` (the default tenant). This allows creating resources for a specific tenant.
+- **Files**: `backend/src/routes/tenants.js` (new), `backend/src/index.js`, `backend/src/routes/venues.js`, `backend/src/routes/screens.js`
+- **Role**: Feature Development — Terminal Agent 1
+- **Status**: TODO
+
+---
+
 ## Multi-Zone Layout Engine (BL-029 → BL-033) — do in order, each depends on the previous
 
 ### BL-029 — Zone-aware /resolve endpoint `[S]`

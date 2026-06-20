@@ -353,3 +353,42 @@ The `ticker_scroll` widget receives `config.items: string[]`. It does not know o
 
 **Source**: Human decision 2026-06-20
 **Status**: Active
+
+---
+
+## D-018 — Multi-tenancy: single-database shared-schema with tenant_id row partitioning
+
+**Decision**: ClubHub TV uses a single PostgreSQL database with shared tables. Every entity table that belongs to an operator organisation carries a `tenant_id UUID` column referencing the `tenants` table. All queries include `AND tenant_id = $x` to enforce row-level isolation. No cross-tenant data access is possible — a UUID from the wrong tenant returns 0 rows.
+
+**Data hierarchy**: `Tenant → Venues → Screens → Content / Playlists / Schedules`
+- One tenant = one operator organisation (e.g. a pub group running 5 clubs = 1 tenant, 5 venues)
+- Content, playlists, schedules, and ticker_items are tenant-scoped
+- Venues belong to a tenant; screens belong to a venue (and inherit tenant_id)
+
+**Enforcement model** (mirrors SCREEN_AUTH_ENFORCE pattern):
+- `MULTI_TENANT_ENFORCE=false` (default): middleware resolves `req.tenantId` from `DEFAULT_TENANT_ID` env var. All existing single-tenant deployments work without change.
+- `MULTI_TENANT_ENFORCE=true`: middleware extracts `tenant_id` from JWT claims (`req.user.tenant_id`). Rejects requests with missing/invalid tenant context with `403 TENANT_CONTEXT_MISSING`.
+- Can be implemented fully now; activated when real operator auth (JWT) is wired.
+
+**Pi/screen runtime**: Pi sends `SCREEN_ID` only. Backend resolves `tenant_id` from the screen record server-side — no tenant logic on the device. 72h offline autonomy unchanged.
+
+**Tables requiring tenant_id** (in migration order):
+1. `venues` — `tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT`
+2. `screens` — same (screens inherit from venue but carry their own FK for query performance)
+3. `content` — `ON DELETE CASCADE`
+4. `named_playlists` — `ON DELETE CASCADE`
+5. `schedules` — `ON DELETE CASCADE`
+6. `ticker_items` — `ON DELETE CASCADE` (added when BL-033 lands; noted for awareness)
+
+**Indexes**: `CREATE INDEX idx_{table}_tenant ON {table}(tenant_id)` on every partitioned table.
+
+**Default tenant**: migration seeds one tenant (`name: 'ClubHub Default', slug: 'default'`) and backfills all existing rows. Single-venue deployments stay on this tenant permanently.
+
+**What is NOT in scope**:
+- Separate databases or schemas per tenant (overkill at this scale)
+- PostgreSQL Row Level Security (adds complexity, doesn't fit raw SQL pattern D-001)
+- Tenant management UI (admin API only — no CMS surface needed yet)
+- Cross-tenant content sharing (explicitly forbidden — content is always tenant-scoped)
+
+**Source**: Human decision 2026-06-20 — Gemini multi-tenancy review
+**Status**: Active — implementation in BL-034, BL-035, BL-036
