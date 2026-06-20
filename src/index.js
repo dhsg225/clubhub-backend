@@ -29,6 +29,7 @@ const tickerRouter         = require('./routes/ticker');
 const tenantsRouter        = require('./routes/tenants');
 const sponsorRouter        = require('./routes/sponsor');
 const cardTemplatesRouter  = require('./routes/card-templates');
+const mediaRouter          = require('./routes/media');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -112,6 +113,9 @@ app.use('/sponsor', rateLimit.write, injectTenantContext, sponsorRouter);
 // Card template catalogue (BL-040 / D-019 L2)
 // GET is public (tenant-scoped via injectTenantContext); POST is admin-only (guarded in router)
 app.use('/card-templates', serveSpaForBrowser, rateLimit.write, injectTenantContext, cardTemplatesRouter);
+
+// Media upload tokens (BL-041 — direct browser→Bunny upload)
+app.use('/media', rateLimit.write, injectTenantContext, mediaRouter);
 
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);
