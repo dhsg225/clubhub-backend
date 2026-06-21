@@ -50,12 +50,22 @@ router.post('/upload-token', (req, res) => {
   const storagePath = `tenants/${tenantId}/${fileId}.${ext}`;
 
   const upload_url = `https://${storageHostname}/${storageZone}/${storagePath}`;
-  const cdn_url    = `${cdnBaseUrl.replace(/\/+$/, '')}/${storagePath}`;
+
+  // Raw CDN URL (for upload reference)
+  const cdn_url_raw = `${cdnBaseUrl.replace(/\/+$/, '')}/${storagePath}`;
+
+  // Optimized CDN URL for Pi playback — Bunny Optimizer downscales + converts to WebP
+  // This neutralises H-CHR-01 (GPU memory crash on oversized images)
+  const isVideo = ext === 'mp4';
+  const cdn_url = isVideo
+    ? cdn_url_raw  // Video: no optimizer transform
+    : `${cdn_url_raw}?width=1920&height=1080&mode=max&format=webp&quality=85`;
 
   res.json({
     upload_url,
     auth_header: { AccessKey: apiKey },
     cdn_url,
+    cdn_url_raw,
     cdn_base_url: cdnBaseUrl,
   });
 });
