@@ -77,8 +77,8 @@ router.post('/', requireAdminKey, async (req, res) => {
   }
 });
 
-// PATCH /card-templates/:slug — update display_name, field_schema, sort_order
-router.patch('/:slug', requireAdminKey, async (req, res) => {
+// PATCH/PUT /card-templates/:slug — update display_name, field_schema, sort_order
+async function updateTemplate(req, res) {
   const { display_name, field_schema, sort_order } = req.body;
 
   const updates = [];
@@ -120,7 +120,9 @@ router.patch('/:slug', requireAdminKey, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}
+router.patch('/:slug', requireAdminKey, updateTemplate);
+router.put('/:slug', requireAdminKey, updateTemplate);
 
 // DELETE /card-templates/:slug — remove a template (cannot delete system templates in enforce mode)
 router.delete('/:slug', requireAdminKey, async (req, res) => {
