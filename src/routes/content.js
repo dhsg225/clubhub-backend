@@ -89,6 +89,65 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PATCH /content/:id — update data, expires_at, or template_type
+router.patch('/:id', async (req, res) => {
+  const { data, expires_at, template_type } = req.body;
+
+  const updates = [];
+  const values = [];
+  let idx = 1;
+
+  if (data !== undefined) {
+    const cleanData = { ...data };
+    delete cleanData.expires_at;
+    updates.push(`data = $${idx++}`);
+    values.push(JSON.stringify(cleanData));
+  }
+  if (expires_at !== undefined) {
+    updates.push(`expires_at = $${idx++}`);
+    values.push(expires_at || null);
+  }
+  if (template_type !== undefined) {
+    updates.push(`template_type = $${idx++}`);
+    values.push(template_type);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  values.push(req.params.id, req.tenantId);
+
+  try {
+    const r = await pool.query(
+      `UPDATE content SET ${updates.join(', ')} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING *`,
+      values
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+
+    // Bust manifest cache for affected screens
+    await pool.query(
+      `DELETE FROM manifest_cache
+       WHERE screen_id IN (
+         SELECT s.screen_id FROM schedules s WHERE s.content_id = $1 AND s.screen_id IS NOT NULL
+         UNION
+         SELECT sc.id FROM schedules s JOIN screens sc ON sc.venue_id = s.venue_id
+           WHERE s.content_id = $1 AND s.screen_id IS NULL AND s.venue_id IS NOT NULL
+         UNION
+         SELECT sc.id FROM screens sc WHERE EXISTS (
+           SELECT 1 FROM schedules WHERE content_id = $1 AND screen_id IS NULL AND venue_id IS NULL
+         )
+       )`,
+      [req.params.id]
+    );
+
+    res.json(r.rows[0]);
+  } catch (err) {
+    console.error('PATCH /content:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /content/:id
 router.delete('/:id', async (req, res) => {
   try {

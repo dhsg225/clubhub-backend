@@ -1,28 +1,23 @@
 'use strict';
 
 /**
- * media.js — BL-041: signed Bunny upload token endpoint
+ * media.js — BL-041 + BL-050
  *
- * POST /media/upload-token
- *   Validates tenant context, generates a scoped upload URL for direct browser→Bunny PUT.
- *   No file bytes touch Node.js — the client PUTs directly to Bunny CDN.
- *
- * Returns: { upload_url, auth_header, cdn_url }
- *   upload_url  — Bunny Storage API PUT target (tenant-scoped path)
- *   auth_header — { AccessKey } for the PUT request
- *   cdn_url     — public CDN URL for the uploaded file (store in content data JSONB)
+ * POST /media/upload-token — generate Bunny upload URL, auto-catalogue in media_library
+ * GET  /media/library      — browse previously uploaded media for reuse
  */
 
 const express = require('express');
 const crypto  = require('node:crypto');
 const path    = require('node:path');
+const { pool } = require('../db');
 
 const router = express.Router();
 
 const ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4']);
 
 // POST /media/upload-token
-router.post('/upload-token', (req, res) => {
+router.post('/upload-token', async (req, res) => {
   const apiKey          = process.env.BUNNY_API_KEY;
   const storageZone     = process.env.BUNNY_STORAGE_ZONE;
   const cdnBaseUrl      = process.env.BUNNY_CDN_BASE_URL;
@@ -33,7 +28,7 @@ router.post('/upload-token', (req, res) => {
     return res.status(501).json({ error: 'Media storage not configured' });
   }
 
-  const { filename } = req.body || {};
+  const { filename, file_size } = req.body || {};
   if (!filename || typeof filename !== 'string') {
     return res.status(400).json({ error: 'filename is required' });
   }
@@ -55,11 +50,22 @@ router.post('/upload-token', (req, res) => {
   const cdn_url_raw = `${cdnBaseUrl.replace(/\/+$/, '')}/${storagePath}`;
 
   // Optimized CDN URL for Pi playback — Bunny Optimizer downscales + converts to WebP
-  // This neutralises H-CHR-01 (GPU memory crash on oversized images)
   const isVideo = ext === 'mp4';
   const cdn_url = isVideo
-    ? cdn_url_raw  // Video: no optimizer transform
+    ? cdn_url_raw
     : `${cdn_url_raw}?width=1920&height=1080&mode=max&format=webp&quality=85`;
+
+  // BL-050: auto-catalogue in media_library
+  try {
+    await pool.query(
+      `INSERT INTO media_library (tenant_id, filename, cdn_url, cdn_url_raw, file_size, media_type)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [tenantId, filename, cdn_url, cdn_url_raw, file_size || null, isVideo ? 'video' : 'image']
+    );
+  } catch (catalogErr) {
+    // Non-fatal — upload token still works even if catalogue fails
+    console.error('media_library insert failed:', catalogErr.message);
+  }
 
   res.json({
     upload_url,
@@ -68,6 +74,35 @@ router.post('/upload-token', (req, res) => {
     cdn_url_raw,
     cdn_base_url: cdnBaseUrl,
   });
+});
+
+// GET /media/library — browse uploaded media for reuse
+router.get('/library', async (req, res) => {
+  const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+  try {
+    const r = await pool.query(
+      `SELECT id, filename, cdn_url, cdn_url_raw, file_size, media_type, created_at
+       FROM media_library
+       WHERE tenant_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [req.tenantId, limit, offset]
+    );
+    const countR = await pool.query(
+      'SELECT COUNT(*)::int AS total FROM media_library WHERE tenant_id = $1',
+      [req.tenantId]
+    );
+    res.json({
+      items: r.rows,
+      total: countR.rows[0]?.total ?? 0,
+      limit,
+      offset,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
