@@ -13,7 +13,7 @@
  */
 
 import { renderCard } from './template-stubs.js';
-import { LAYOUTS } from './layout-definitions.js';
+import { getLayoutDefinition } from './layout-definitions.js';
 import { instantiateWidget, type WidgetInstance } from './widget-registry.js';
 
 // Trigger widget self-registration on import
@@ -52,8 +52,7 @@ export function renderLayout(
   for (const t of activeTimers) clearTimeout(t);
   activeTimers = [];
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const layoutDef = LAYOUTS[screenLayout] ?? LAYOUTS['fullscreen']!;
+  const layoutDef = getLayoutDefinition(screenLayout, corpusData);
 
   // Build outer grid
   container.innerHTML = '';
@@ -142,18 +141,20 @@ export function renderLayout(
 
         zoneDiv.appendChild(subDiv);
 
-        const config: Record<string, unknown> = slot.corpus_key
-          ? { items: corpusData[slot.corpus_key] ?? [] }
-          : {};
+        const config: Record<string, unknown> = {
+          ...(slot as any).config ?? {},
+          ...(slot.corpus_key ? { items: corpusData[slot.corpus_key] ?? [] } : {}),
+        };
         const instance = instantiateWidget(slot.widget, subDiv, config);
         activeWidgets.push(instance);
       }
     } else {
       // Non-split: give each slot the full zone div (last slot wins if multiple)
       for (const slot of slots) {
-        const config: Record<string, unknown> = slot.corpus_key
-          ? { items: corpusData[slot.corpus_key] ?? [] }
-          : {};
+        const config: Record<string, unknown> = {
+          ...(slot as any).config ?? {},
+          ...(slot.corpus_key ? { items: corpusData[slot.corpus_key] ?? [] } : {}),
+        };
         const instance = instantiateWidget(slot.widget, zoneDiv, config);
         activeWidgets.push(instance);
       }

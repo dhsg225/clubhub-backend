@@ -392,3 +392,107 @@ The `ticker_scroll` widget receives `config.items: string[]`. It does not know o
 
 **Source**: Human decision 2026-06-20 — Gemini multi-tenancy review
 **Status**: Active — implementation in BL-034, BL-035, BL-036
+
+---
+
+## D-019 — Three-Tier Template Governance Model
+
+**Decision**: Visual design authority in ClubHub TV is structured in three non-overlapping tiers. No tier can override the tier above it.
+
+**Tier 1 — System Core (L1)**: Layout geometry, CSS grid, container queries, and card renderers. Code-owned. Lives in `apps/player-ui/src/layout-engine.ts`, `template-stubs.ts`, `apps/cms-web/src/routes/ContentPreview.tsx`. Operators never touch this layer.
+
+**Tier 2 — Template Catalogue (L2)**: The `card_templates` table is the authoritative list of available template types. Each row defines the `type_slug`, `display_name`, and `field_schema` (JSONB — field keys, labels, types, character limits, required flags). System templates have `tenant_id = NULL`; tenant-custom templates carry a `tenant_id`. Adding a new template type requires: (a) inserting a `card_templates` row (catalogue), and (b) adding a renderer branch to L1 code — both steps required; either alone is incomplete. A future Super-Admin UI will allow L2 catalogue management without code deploys.
+
+**Tier 3 — Content Ingestion (L3)**: Everyday CMS operators fill in fields defined by L2 — text inputs, colour pickers, image uploads. They cannot change field layout, character limits, or add new fields. The `ContentNew.tsx` form reads `field_schema` from the API and generates inputs accordingly. Operators can only put data into pre-approved slots.
+
+**What this prevents**:
+- Drag-and-drop canvas editors that produce off-brand or unreadable output on real screens
+- Hardcoded template lists that require code deploys to extend
+- Template types existing in the form but not in the DB (or vice versa)
+
+**field_schema contract**:
+```json
+{
+  "fields": [
+    { "key": "title", "label": "Title", "type": "text", "max_chars": 60, "required": true },
+    { "key": "background_color", "label": "Background Colour", "type": "color", "required": false, "default": "#1a1a2e" },
+    { "key": "tier", "label": "Tier", "type": "select", "required": false, "options": ["Platinum","Gold","Silver"] },
+    { "key": "sections", "label": "Menu Sections", "type": "sections", "required": false },
+    { "key": "items",    "label": "Items",          "type": "items",    "required": false }
+  ]
+}
+```
+
+Field types: `text` (+ max_chars), `textarea`, `color` (+ default), `select` (+ options[]), `sections` (menu_board structured sub-form), `items` (daily_specials list sub-form).
+
+**What is NOT in scope yet**:
+- Visual drag-and-drop Template Factory UI (Phase Two — after first venue validated on real hardware)
+- Dynamic renderer injection (L1 renderers always require a code deploy)
+- Per-tenant visual themes / CSS variable overrides
+
+**Source**: Human decision 2026-06-20 — Three-Tier Template Governance Model discussion
+**Status**: Active — implementation in BL-040
+
+---
+
+## D-020 — Cognito Guru as invisible engine under ClubHub
+
+**Decision**: Cognito Guru is ClubHub's backend intelligence layer. Venue operators never see or know about Cognito Guru — they only interact with ClubHub. ClubHub calls Cognito Guru GCFs backend-to-backend for AI content generation, social publishing (via LateAPI), and Google Business Profile operations.
+
+**Product hierarchy**:
+- **ClubHub** — the product sold to venues. One login. Physical screens + marketing intelligence.
+- **Cognito Guru** — the invisible engine. AI, social scheduling, GBP. Called via GCF API from ClubHub backend.
+- **LateAPI** — the social transport underneath Cognito Guru. Never called directly by ClubHub.
+
+**Why not bidirectional (venues managed in both systems)**:
+The bidirectional model (venues as Cognito Guru clients visible to operators) breaks the moment a venue employee self-serves. They would need two logins and two systems. The invisible engine model scales to any venue regardless of whether they know what Cognito Guru is.
+
+**Why not fold ClubHub into Cognito Guru**:
+ClubHub's runtime (Pi hardware, 72h corpus, manifest engine, constitutional governance) is fundamentally different infrastructure from Cognito Guru's GCF + Supabase stack. Folding in would require a full rewrite. The bridge is the correct integration boundary.
+
+**Integration pattern**:
+- When a ClubHub tenant is created → auto-provision a Cognito Guru client (GCF call, fire-and-forget)
+- `cognito_mappings` table stores `clubhub_tenant_id ↔ cognito_client_id`
+- All Cognito calls use a backend service key (`COGNITO_SERVICE_KEY`) — never a user session
+- All Cognito features degrade gracefully when `COGNITO_SERVICE_KEY` is not set (no crash, log warn)
+- ClubHub backend is the only caller — frontend never calls Cognito directly
+
+**Cognito features exposed in ClubHub**:
+1. AI copy generation — "Write for me" in card authoring form
+2. Social publishing — `cross_post: true` on cards → Cognito social GCF → LateAPI
+3. GBP posting — event cards with GBP flag → Cognito GBP GCF (future)
+
+**What is NOT in scope**:
+- Venue operators logging into Cognito Guru
+- Content authored in Cognito Guru pushed to ClubHub screens (ClubHub is authoring origin)
+- Shannon's agency managing venue screens through Cognito Guru dashboard
+
+**Bridge GCF — confirmed 2026-06-20**:
+
+Base URL: `https://us-central1-cognito-guru.cloudfunctions.net/clubhub-bridge`
+Auth: `X-API-Key: <value>` header on every call (stored as `COGNITO_SERVICE_KEY` on ClubHub backend, `CLUBHUB_BRIDGE_API_KEY` on GCF).
+
+**Org/Client decision**: API key implicitly scopes to one fixed org via `CLUBHUB_ORG_ID` env var on the GCF. ClubHub never passes `org_id`. `provision` creates a Cognito **Client** per ClubHub venue plus a default Project (`{venue_name} — Social`). Both `client_id` and `project_id` are stored in `cognito_mappings`. `social_schedule` resolves venue → project internally — ClubHub only ever passes `venue_id`.
+
+**Confirmed endpoint shapes**:
+- `POST ?endpoint=provision&v=1` — `{ venue_id, venue_name, plan? }` → `{ cognito_client_id, created }` (idempotent)
+- `POST ?endpoint=ai_generate&v=1` — `{ venue_id, template_slug, context }` → `{ generated: { ...fields } }`. Supported slugs: `promo_slide` (title+subtitle), `event_banner` (description), `sponsor_banner` (tagline), `daily_specials` (headline). `menu_board` → 400.
+- `POST ?endpoint=social_schedule&v=1` — `{ venue_id, platforms, content: { text, media_url? }, schedule_at }` → `{ job_id, scheduled_at }`. `job_id` is Cognito's `social_posts.id`; LateAPI ref is assigned when the publisher cron fires (~1 min).
+- `POST ?endpoint=gbp_post&v=1` — 501 stub (future)
+
+**Versioning**: append `?v=1` to all calls from ClubHub. Responses include `"api_version": "1"`.
+
+**One-time setup per venue**: before `social_schedule` works for a venue, social accounts must be connected in Cognito UI (Settings → Social Connections). The bridge cannot create LateAPI OAuth connections — those require browser-based OAuth flow. This is a per-venue one-time action.
+
+**cognito_mappings schema** (in `migrate_018.sql`):
+```sql
+CREATE TABLE IF NOT EXISTS cognito_mappings (
+  clubhub_tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  cognito_client_id VARCHAR(100) NOT NULL,
+  cognito_project_id VARCHAR(100),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**Source**: Human decision 2026-06-20; bridge GCF confirmed 2026-06-20 by Cognito Guru agent
+**Status**: Active — implementation in BL-045, BL-046, BL-047. Unblocked 2026-06-20.

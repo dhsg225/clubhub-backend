@@ -1,10 +1,17 @@
 /**
  * Clock widget — live HH:MM:SS display, updates every second.
  * Self-registers on import as 'clock'.
+ *
+ * Config:
+ *   timezone — IANA timezone string (default: 'Asia/Singapore')
  */
 import { registerWidget, type WidgetInstance } from '../widget-registry.js';
 
-registerWidget('clock', (container): WidgetInstance => {
+registerWidget('clock', (container, config): WidgetInstance => {
+  const timezone = (typeof config['timezone'] === 'string' && config['timezone'])
+    ? config['timezone']
+    : 'Asia/Singapore';
+
   container.style.cssText = [
     'display:flex',
     'align-items:center',
@@ -22,12 +29,16 @@ registerWidget('clock', (container): WidgetInstance => {
   const span = document.createElement('span');
   container.appendChild(span);
 
+  const formatter = new Intl.DateTimeFormat([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: timezone,
+  });
+
   function tick(): void {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    span.textContent = `${hh}:${mm}:${ss}`;
+    span.textContent = formatter.format(new Date());
   }
 
   tick();

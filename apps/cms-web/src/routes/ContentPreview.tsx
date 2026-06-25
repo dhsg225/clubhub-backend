@@ -58,7 +58,7 @@ function ContentPreview(): JSX.Element {
   return <TemplateStub item={item} />;
 }
 
-function TemplateStub({ item }: { item: ContentItem }): JSX.Element {
+export function TemplateStub({ item }: { item: ContentItem }): JSX.Element {
   if (item.template_type === 'promo_slide')    return <PromoSlideRenderer item={item} />;
   if (item.template_type === 'event_banner')   return <EventBannerRenderer item={item} />;
   if (item.template_type === 'sponsor_banner') return <SponsorBannerRenderer item={item} />;

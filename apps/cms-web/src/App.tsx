@@ -34,6 +34,15 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: '/preview/content/:id', lazy: () => import('./routes/ContentPreview.js') },
+      { path: '/preview/playlist/:id', lazy: () => import('./routes/PlaylistPreview.js') },
+      { path: '/preview/screen/:screenId', lazy: () => import('./routes/ScreenPreview.js') },
+      {
+        path: '/preview/layout/:slug',
+        lazy: async () => {
+          const mod = await import('./routes/ScreenPreview.js');
+          return { Component: mod.LayoutPreviewComponent };
+        },
+      },
     ],
   },
   {
@@ -54,11 +63,30 @@ const router = createBrowserRouter([
       { path: '/schedules', lazy: () => import('./routes/ScheduleList.js') },
       { path: '/schedules/new', lazy: () => import('./routes/ScheduleCreator.js') },
       { path: '/content/new', lazy: () => import('./routes/ContentNew.js') },
+      { path: '/content/:id/edit', lazy: () => import('./routes/ContentEdit.js') },
       { path: '/content/:id', lazy: () => import('./routes/ContentDetail.js') },
       { path: '/ticker', lazy: () => import('./routes/TickerManager.js') },
+      { path: '/layouts', lazy: () => import('./routes/LayoutBuilder.js') },
+      {
+        path: '/layouts/new',
+        lazy: async () => {
+          const mod = await import('./routes/LayoutBuilder.js');
+          return { Component: mod.LayoutEditor };
+        },
+      },
+      {
+        path: '/layouts/:slug/edit',
+        lazy: async () => {
+          const mod = await import('./routes/LayoutBuilder.js');
+          return { Component: mod.LayoutEditor };
+        },
+      },
       { path: '/templates', lazy: () => import('./routes/TemplateGallery.js') },
+      { path: '/templates/author', lazy: () => import('./routes/TemplateAuthor.js') },
       { path: '/audit', lazy: () => import('./routes/AuditLog.js') },
       { path: '/constitutional', lazy: () => import('./routes/ConstitutionalConsole.js') },
+      { path: '/widgets', lazy: () => import('./routes/WidgetGallery.js') },
+      { path: '/help', lazy: () => import('./routes/HelpCenter.js') },
     ],
   },
 ]);

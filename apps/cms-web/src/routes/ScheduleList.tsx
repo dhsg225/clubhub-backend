@@ -47,7 +47,7 @@ function scheduleWindow(s: Schedule): string {
 }
 
 function scheduleTarget(s: Schedule): string {
-  if (s.screen_id) return `Screen: ${s.screen_id.slice(0, 12)}…`;
+  if (s.screen_id) return `Location: ${s.screen_id.slice(0, 16)}${s.screen_id.length > 16 ? '…' : ''}`;
   if (s.venue_id) return `Venue: ${s.venue_id}`;
   return 'Global';
 }
@@ -111,7 +111,7 @@ function DeleteButton({ id, onDeleted }: { id: string; onDeleted: () => void }):
   });
 
   function handleClick(): void {
-    if (!window.confirm('Delete this schedule? Screens will stop playing this content/playlist on their next sync.')) return;
+    if (!window.confirm('Delete this schedule? Locations will stop playing this content/playlist on their next sync.')) return;
     mutate();
   }
 
@@ -243,8 +243,17 @@ export function Component(): JSX.Element {
                   <td style={{ ...tdStyle, color: '#374151', fontSize: '0.78rem', fontVariantNumeric: 'tabular-nums' }}>
                     {formatDaypart(s)}
                   </td>
-                  {/* Delete */}
-                  <td style={{ ...tdStyle, textAlign: 'right' }}>
+                  {/* Actions */}
+                  <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {s.screen_id && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(`/preview/screen/${s.screen_id}`, '_blank', 'width=1280,height=720')}
+                        style={{ fontSize: '0.72rem', fontWeight: 600, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', marginRight: '0.5rem' }}
+                      >
+                        ▶ Preview
+                      </button>
+                    )}
                     <DeleteButton
                       id={s.id}
                       onDeleted={() => void queryClient.invalidateQueries({ queryKey: ['schedules-all'] })}

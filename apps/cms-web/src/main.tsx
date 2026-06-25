@@ -11,6 +11,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './styles/responsive.css';
 import { App } from './App.js';
 
 const root = document.getElementById('root');

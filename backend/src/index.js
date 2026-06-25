@@ -31,6 +31,8 @@ const sponsorRouter        = require('./routes/sponsor');
 const cardTemplatesRouter  = require('./routes/card-templates');
 const mediaRouter          = require('./routes/media');
 const aiRouter             = require('./routes/ai');
+const layoutsRouter        = require('./routes/layouts');
+const widgetsRouter        = require('./routes/widgets');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -120,6 +122,10 @@ app.use('/media', rateLimit.write, injectTenantContext, mediaRouter);
 
 // AI generation via Cognito bridge (BL-047)
 app.use('/ai', serveSpaForBrowser, rateLimit.write, injectTenantContext, aiRouter);
+
+// Layout catalogue (BL-048)
+app.use('/layouts', serveSpaForBrowser, rateLimit.write, layoutsRouter);
+app.use('/widgets', serveSpaForBrowser, rateLimit.write, widgetsRouter);
 
 // Less frequent / legacy
 app.use('/playlist',  rateLimit.write, playlistRouter);

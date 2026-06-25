@@ -27,6 +27,10 @@ router.get('/:screen_id', async (req, res) => {
     ]);
 
     const screen_layout = screenRow.rows[0]?.screen_layout ?? 'fullscreen';
+
+    // BL-048: join layout definition from layouts table
+    const layoutRow = await pool.query('SELECT definition FROM layouts WHERE slug = $1', [screen_layout]);
+    const layout_definition = layoutRow.rows[0]?.definition ?? null;
     const ticker_items = tickerRow.rows.map(r => r.text);
 
     // Flat playlist (backward compat — all items regardless of zone)
@@ -64,6 +68,7 @@ router.get('/:screen_id', async (req, res) => {
     const resolved = {
       screen_id,
       screen_layout,
+      ...(layout_definition ? { layout_definition } : {}),
       ticker_items,
       resolved_at:       Date.now(),
       resolution_level:  (manifest.items?.length ?? 0) > 0 ? 1 : 0,

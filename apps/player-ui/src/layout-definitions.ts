@@ -1,5 +1,5 @@
 /**
- * Layout definitions (D-017).
+ * Layout definitions (D-017 / BL-048).
  *
  * Each layout describes:
  *   - CSS grid geometry (grid_areas, grid_rows, grid_cols)
@@ -10,6 +10,10 @@
  *   left-fixed  — occupies a fixed-width left sub-div within the zone
  *   fill        — occupies the remaining space to the right of any left-fixed widget
  *   full        — occupies the entire zone div
+ *
+ * BL-048: LAYOUTS is now a hardcoded fallback. Production reads layout_definition
+ * from the /resolve corpus response. If absent (old Pi, stale cache), falls back
+ * to the matching hardcoded entry by slug.
  */
 
 export interface WidgetSlot {
@@ -28,7 +32,8 @@ export interface LayoutDefinition {
   widget_slots: WidgetSlot[];
 }
 
-export const LAYOUTS: Record<string, LayoutDefinition> = {
+/** Hardcoded fallback — used only when corpus.layout_definition is absent. */
+const FALLBACK_LAYOUTS: Record<string, LayoutDefinition> = {
   fullscreen: {
     grid_areas:     '"main"',
     grid_rows:      '1fr',
@@ -64,3 +69,33 @@ export const LAYOUTS: Record<string, LayoutDefinition> = {
     widget_slots:   [],
   },
 };
+
+/** Backward-compat export — the hardcoded object. */
+export const LAYOUTS = FALLBACK_LAYOUTS;
+
+/**
+ * Get the layout definition for the current screen.
+ *
+ * Priority:
+ * 1. corpusData.layout_definition (from /resolve → layouts table JSONB)
+ * 2. Hardcoded fallback by screenLayout slug
+ * 3. Hardcoded fullscreen as safe default
+ */
+export function getLayoutDefinition(
+  screenLayout: string,
+  corpusData: Record<string, unknown> = {},
+): LayoutDefinition {
+  // 1. Corpus-provided definition (DB-backed, dynamic)
+  const corpusDef = corpusData['layout_definition'];
+  if (corpusDef && typeof corpusDef === 'object' && !Array.isArray(corpusDef)) {
+    const def = corpusDef as Record<string, unknown>;
+    if (typeof def['grid_areas'] === 'string' && Array.isArray(def['playlist_zones'])) {
+      return def as unknown as LayoutDefinition;
+    }
+  }
+
+  // 2. Hardcoded fallback by slug
+  // 3. Fullscreen as safe default
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  return FALLBACK_LAYOUTS[screenLayout] ?? FALLBACK_LAYOUTS['fullscreen']!;
+}

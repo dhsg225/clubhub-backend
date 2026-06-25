@@ -165,7 +165,7 @@ export function Component(): JSX.Element {
 
     if (!playlistId) { setValidationError('Select a playlist.'); return; }
     if (target === 'venue' && !venueId) { setValidationError('Select a venue.'); return; }
-    if (target === 'screen' && !screenIdInput.trim()) { setValidationError('Enter a screen ID.'); return; }
+    if (target === 'screen' && !screenIdInput.trim()) { setValidationError('Enter a location ID.'); return; }
     if (startsAt && endsAt && new Date(endsAt) <= new Date(startsAt)) {
       setValidationError('End date must be after start date.');
       return;
@@ -243,7 +243,7 @@ export function Component(): JSX.Element {
                 />
                 {t === 'global' && 'All venues (global)'}
                 {t === 'venue' && 'Specific venue'}
-                {t === 'screen' && 'Specific screen'}
+                {t === 'screen' && 'Specific location'}
               </label>
             ))}
           </div>
@@ -268,16 +268,16 @@ export function Component(): JSX.Element {
 
           {target === 'screen' && (
             <div style={{ marginTop: '0.5rem' }}>
-              <FieldLabel htmlFor="screen-id-input">Screen ID</FieldLabel>
+              <FieldLabel htmlFor="screen-id-input">Location ID</FieldLabel>
               <input
                 id="screen-id-input"
                 type="text"
                 value={screenIdInput}
                 onChange={(e) => setScreenIdInput(e.target.value)}
-                placeholder="screen-abc-123"
+                placeholder="e.g. gosford-foyer"
                 style={inputStyle}
               />
-              <HelpText>Enter the exact screen ID as enrolled in the system.</HelpText>
+              <HelpText>Enter the location ID as it appears in the venue dashboard.</HelpText>
             </div>
           )}
         </section>

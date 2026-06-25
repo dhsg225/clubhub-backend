@@ -222,6 +222,16 @@ function FieldGroup({ children }: { children: React.ReactNode }): JSX.Element {
  * renders a plain URL text input so operator can paste a URL manually.
  * ================================================================== */
 
+interface MediaLibraryItem {
+  id: string;
+  filename: string;
+  cdn_url: string;
+  cdn_url_raw: string;
+  file_size: number | null;
+  media_type: string;
+  created_at: string;
+}
+
 function ImageField({
   value,
   onChange,
@@ -236,20 +246,31 @@ function ImageField({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [fallbackMode, setFallbackMode] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryFilter, setLibraryFilter] = useState('');
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiUnconfigured, setAiUnconfigured] = useState(false);
+
+  const { data: libraryData } = useQuery<{ items: MediaLibraryItem[]; total: number }>({
+    queryKey: ['media-library'],
+    queryFn: () => api.get<{ items: MediaLibraryItem[]; total: number }>('/media/library?limit=100'),
+    enabled: libraryOpen,
+    staleTime: 15_000,
+  });
 
   async function handleFileSelect(file: File): Promise<void> {
     setError('');
     setUploading(true);
 
     try {
-      // Step 1: get upload token
       const tokenRes = await api.post<{
         upload_url: string;
         auth_header: { AccessKey: string };
         cdn_url: string;
-      }>('/media/upload-token', { filename: file.name });
+      }>('/media/upload-token', { filename: file.name, file_size: file.size });
 
-      // Step 2: PUT directly to Bunny
       const putRes = await fetch(tokenRes.upload_url, {
         method: 'PUT',
         headers: {
@@ -263,7 +284,6 @@ function ImageField({
         throw new Error(`Upload failed: HTTP ${putRes.status}`);
       }
 
-      // Step 3: store CDN URL
       onChange(tokenRes.cdn_url);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -278,18 +298,34 @@ function ImageField({
     }
   }
 
-  // Fallback mode: plain URL text input
+  async function handleAiGenerate(): Promise<void> {
+    if (!aiPrompt.trim() || aiGenerating) return;
+    setError('');
+    setAiGenerating(true);
+    try {
+      const result = await api.post<{ cdn_url: string }>('/ai/generate-image', {
+        prompt: aiPrompt.trim(),
+        aspect: 'landscape',
+      });
+      onChange(result.cdn_url);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('501') || msg.includes('not configured')) {
+        setAiUnconfigured(true);
+        setAiOpen(false);
+      }
+      setError(msg);
+    } finally {
+      setAiGenerating(false);
+    }
+  }
+
   if (fallbackMode) {
     return (
       <FieldGroup>
         <FieldLabel>{label}{required ? '' : ' (optional)'}</FieldLabel>
-        <input
-          type="url"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="https://example.com/image.jpg"
-          style={inputStyle}
-        />
+        <input type="url" value={value} onChange={(e) => onChange(e.target.value)}
+          placeholder="https://example.com/image.jpg" style={inputStyle} />
         <span style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.15rem', display: 'block' }}>
           Media storage not configured — enter image URL manually
         </span>
@@ -297,59 +333,174 @@ function ImageField({
     );
   }
 
+  const filteredLibrary = (libraryData?.items ?? []).filter((m) =>
+    !libraryFilter || m.filename.toLowerCase().includes(libraryFilter.toLowerCase()),
+  );
+
   return (
     <FieldGroup>
       <FieldLabel>{label}{required ? '' : ' (optional)'}</FieldLabel>
 
       {/* Current image preview */}
       {value && (
-        <div style={{ marginBottom: '0.5rem', position: 'relative' }}>
-          <img
-            src={value}
-            alt="Uploaded"
-            style={{
-              maxWidth: '100%', maxHeight: '120px', borderRadius: '4px',
-              border: '1px solid #e5e7eb', objectFit: 'contain',
-              backgroundColor: '#f9fafb',
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            style={{
-              position: 'absolute', top: '4px', right: '4px',
-              padding: '0.15rem 0.4rem', fontSize: '0.7rem', fontWeight: 600,
-              color: '#991b1b', backgroundColor: '#fef2f2',
-              border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer',
-            }}
-          >✕</button>
+        <div style={{ marginBottom: '0.5rem', position: 'relative', display: 'inline-block' }}>
+          <img src={value} alt="Uploaded" style={{
+            maxWidth: '100%', maxHeight: '120px', borderRadius: '4px',
+            border: '1px solid #e5e7eb', objectFit: 'contain', backgroundColor: '#f9fafb',
+          }} />
+          <button type="button" onClick={() => onChange('')} style={{
+            position: 'absolute', top: '4px', right: '4px',
+            padding: '0.15rem 0.4rem', fontSize: '0.7rem', fontWeight: 600,
+            color: '#991b1b', backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer',
+          }}>✕</button>
         </div>
       )}
 
-      {/* File input */}
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp,video/mp4"
-        disabled={uploading}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void handleFileSelect(file);
-        }}
-        style={{
-          fontSize: '0.8rem', color: '#374151',
-          opacity: uploading ? 0.5 : 1,
-        }}
-      />
+      {/* Action buttons row */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+        <label style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+          padding: '0.35rem 0.7rem', fontSize: '0.78rem', fontWeight: 600,
+          color: '#1d4ed8', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe',
+          borderRadius: '5px', cursor: uploading ? 'not-allowed' : 'pointer',
+          opacity: uploading ? 0.6 : 1,
+        }}>
+          Upload file
+          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4"
+            disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFileSelect(f); }}
+            style={{ display: 'none' }} />
+        </label>
+
+        <button type="button" onClick={() => setLibraryOpen((o) => !o)} style={{
+          padding: '0.35rem 0.7rem', fontSize: '0.78rem', fontWeight: 600,
+          color: libraryOpen ? '#1d4ed8' : '#374151',
+          backgroundColor: libraryOpen ? '#eff6ff' : '#f9fafb',
+          border: `1px solid ${libraryOpen ? '#bfdbfe' : '#d1d5db'}`,
+          borderRadius: '5px', cursor: 'pointer',
+        }}>
+          {libraryOpen ? 'Close library' : 'Choose from library'}
+        </button>
+
+        {!aiUnconfigured && (
+          <button type="button" onClick={() => setAiOpen((o) => !o)} style={{
+            padding: '0.35rem 0.7rem', fontSize: '0.78rem', fontWeight: 600,
+            color: aiOpen ? '#7c3aed' : '#374151',
+            backgroundColor: aiOpen ? '#f5f3ff' : '#f9fafb',
+            border: `1px solid ${aiOpen ? '#c4b5fd' : '#d1d5db'}`,
+            borderRadius: '5px', cursor: 'pointer',
+          }}>
+            {aiOpen ? 'Close AI' : 'Generate image'}
+          </button>
+        )}
+      </div>
 
       {uploading && (
-        <div style={{ fontSize: '0.78rem', color: '#1d4ed8', marginTop: '0.25rem' }}>
-          Uploading…
+        <div style={{ fontSize: '0.78rem', color: '#1d4ed8', marginTop: '0.25rem' }}>Uploading…</div>
+      )}
+      {error && (
+        <div style={{ fontSize: '0.78rem', color: '#991b1b', marginTop: '0.25rem' }}>{error}</div>
+      )}
+
+      {/* AI image generation drawer */}
+      {aiOpen && (
+        <div style={{
+          marginTop: '0.5rem', border: '1px solid #c4b5fd', borderRadius: '8px',
+          backgroundColor: '#faf5ff', padding: '0.75rem', marginBottom: '0.25rem',
+        }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#7c3aed', marginBottom: '0.4rem' }}>
+            Describe the image you want
+          </div>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <input
+              type="text"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="e.g. A vibrant pub scene with live music and cold beers"
+              disabled={aiGenerating}
+              style={{ ...inputStyle, flex: 1, fontSize: '0.78rem', padding: '0.35rem 0.5rem' }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && aiPrompt.trim() && !aiGenerating) {
+                  void handleAiGenerate();
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={aiGenerating || !aiPrompt.trim()}
+              onClick={() => void handleAiGenerate()}
+              style={{
+                padding: '0.35rem 0.75rem', fontSize: '0.78rem', fontWeight: 600,
+                color: '#fff', backgroundColor: aiGenerating ? '#a78bfa' : '#7c3aed',
+                border: 'none', borderRadius: '5px',
+                cursor: aiGenerating || !aiPrompt.trim() ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {aiGenerating ? 'Generating…' : value ? 'Regenerate' : 'Generate'}
+            </button>
+          </div>
+          <div style={{ fontSize: '0.65rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+            AI generates a 1792×1024 image and uploads it to CDN
+          </div>
         </div>
       )}
 
-      {error && (
-        <div style={{ fontSize: '0.78rem', color: '#991b1b', marginTop: '0.25rem' }}>
-          {error}
+      {/* Library drawer */}
+      {libraryOpen && (
+        <div style={{
+          marginTop: '0.5rem', border: '1px solid #bfdbfe', borderRadius: '8px',
+          backgroundColor: '#f8faff', padding: '0.75rem', maxHeight: '280px', overflowY: 'auto',
+        }}>
+          <input
+            type="text"
+            value={libraryFilter}
+            onChange={(e) => setLibraryFilter(e.target.value)}
+            placeholder="Filter by filename…"
+            style={{ ...inputStyle, fontSize: '0.78rem', marginBottom: '0.5rem', padding: '0.3rem 0.5rem' }}
+          />
+          {filteredLibrary.length === 0 && (
+            <p style={{ fontSize: '0.78rem', color: '#9ca3af', margin: '0.25rem 0' }}>
+              {libraryData ? 'No images found.' : 'Loading library…'}
+            </p>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '0.4rem' }}>
+            {filteredLibrary.map((m) => {
+              const isSelected = value === m.cdn_url;
+              const isImage = m.media_type === 'image';
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => { onChange(m.cdn_url); setLibraryOpen(false); }}
+                  title={m.filename}
+                  style={{
+                    padding: '3px', border: isSelected ? '2px solid #1d4ed8' : '1px solid #d1d5db',
+                    borderRadius: '5px', backgroundColor: '#fff', cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+                  }}
+                >
+                  {isImage ? (
+                    <img src={m.cdn_url_raw + '?width=160&height=90&mode=crop&format=webp&quality=60'}
+                      alt={m.filename}
+                      style={{ width: '100%', height: '50px', objectFit: 'cover', borderRadius: '3px', backgroundColor: '#f3f4f6' }}
+                      loading="lazy" />
+                  ) : (
+                    <div style={{ width: '100%', height: '50px', backgroundColor: '#1e293b', borderRadius: '3px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.55rem', fontWeight: 700 }}>
+                      MP4
+                    </div>
+                  )}
+                  <span style={{
+                    fontSize: '0.5rem', color: '#6b7280', width: '100%', textAlign: 'center',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {m.filename}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </FieldGroup>
@@ -659,39 +810,50 @@ function LivePreview({ type, data }: { type: string; data: Record<string, unknow
 
   const bg = (data['background_color'] as string) || STUB_COLORS[type] || '#374151';
   const textColor = (data['text_color'] as string) || '#ffffff';
+  const bgImage = (data['background_image'] as string) || (data['media_url'] as string) || '';
+  const isVideo = bgImage.includes('.mp4');
+  const skipKeys = new Set(['title', 'event_name', 'sponsor_name', 'headline', 'background_image', 'media_url', 'media_hash']);
 
-  // Collect non-empty string entries for preview (skip color/complex fields)
   const entries: [string, string][] = Object.entries(data)
     .filter(([k, v]) =>
       typeof v === 'string' && v.trim() !== ''
-      && k !== 'title' && k !== 'event_name' && k !== 'sponsor_name' && k !== 'headline'
-      && !k.includes('color'),
+      && !skipKeys.has(k) && !k.includes('color'),
     )
     .map(([k, v]) => [k.replace(/_/g, ' '), v as string]);
 
+  const containerStyle: React.CSSProperties = {
+    position: 'absolute', inset: 0, backgroundColor: bg,
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    ...(bgImage && !isVideo ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}),
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
-      <div style={{
-        position: 'absolute', inset: 0, backgroundColor: bg,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-      }}>
+      <div style={containerStyle}>
+        {/* Video background */}
+        {bgImage && isVideo && (
+          <video src={bgImage} autoPlay loop muted playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        )}
+        {/* Dark overlay for text legibility */}
+        {bgImage && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)' }} />}
         <div style={{
           position: 'absolute', top: '5%', left: '5%',
           fontFamily: 'monospace', fontSize: 'clamp(0.45rem, 1.5vw, 0.7rem)',
           fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase',
-          opacity: 0.65, color: textColor,
+          opacity: 0.65, color: textColor, zIndex: 1,
         }}>{type}</div>
         <div style={{
           position: 'absolute', top: '5%', right: '5%',
           fontFamily: 'monospace', fontSize: 'clamp(0.4rem, 1.2vw, 0.65rem)',
-          fontWeight: 700, letterSpacing: '0.2em', opacity: 0.3, color: textColor,
+          fontWeight: 700, letterSpacing: '0.2em', opacity: 0.3, color: textColor, zIndex: 1,
         }}>PREVIEW</div>
         <div style={{
           color: textColor, fontFamily: 'system-ui, sans-serif',
           fontSize: 'clamp(1rem, 4.5vw, 3.5rem)', fontWeight: 800, letterSpacing: '-0.02em',
           marginBottom: '4%', textAlign: 'center', lineHeight: 1.1, padding: '0 8%', wordBreak: 'break-word',
+          position: 'relative', zIndex: 1,
         }}>{title}</div>
-        <div style={{ width: '70%', maxWidth: '900px' }}>
+        <div style={{ width: '70%', maxWidth: '900px', position: 'relative', zIndex: 1 }}>
           {entries.map(([key, val]) => (
             <div key={key} style={{
               display: 'flex', gap: '3%', marginBottom: '2%',
@@ -747,7 +909,7 @@ export function Component(): JSX.Element {
   const currentTemplate = templates?.find((t) => t.type_slug === templateType);
 
   const { mutate: save, isPending, error: saveError } = useMutation({
-    mutationFn: (payload: { template_type: string; data: Record<string, unknown>; expires_at: string | null; cross_post?: boolean }) =>
+    mutationFn: (payload: { template_type: string; data: Record<string, unknown>; expires_at: string | null; cross_post?: boolean; platforms?: string[] }) =>
       api.post<{ id: string }>('/content', payload),
     onSuccess: () => {
       navigate('/campaigns');
@@ -804,7 +966,7 @@ export function Component(): JSX.Element {
       template_type: templateType,
       data: formData,
       expires_at: noExpiry ? null : expiresAt || null,
-      ...(crossPost ? { cross_post: true } : {}),
+      ...(crossPost ? { cross_post: true, platforms: ['facebook'] } : {}),
     });
   }
 

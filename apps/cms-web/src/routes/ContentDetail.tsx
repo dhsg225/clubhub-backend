@@ -296,16 +296,26 @@ export function Component(): JSX.Element {
             )}
           </p>
         </div>
-        <button onClick={openPreview} style={{
-          flexShrink: 0,
-          padding: '0.5rem 1rem',
-          backgroundColor: '#1d4ed8', color: '#fff',
-          border: 'none', borderRadius: '6px',
-          fontSize: '0.875rem', fontWeight: 600,
-          cursor: 'pointer', whiteSpace: 'nowrap',
-        }}>
-          Preview on screen ↗
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+          <Link to={`/content/${item.id}/edit`} style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#fff', color: '#374151',
+            border: '1px solid #d1d5db', borderRadius: '6px',
+            fontSize: '0.875rem', fontWeight: 600,
+            textDecoration: 'none', whiteSpace: 'nowrap',
+          }}>
+            Edit
+          </Link>
+          <button onClick={openPreview} style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#1d4ed8', color: '#fff',
+            border: 'none', borderRadius: '6px',
+            fontSize: '0.875rem', fontWeight: 600,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>
+            Preview on screen ↗
+          </button>
+        </div>
       </div>
 
       {/* Meta row */}

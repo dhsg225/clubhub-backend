@@ -389,7 +389,7 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Note**: Before social publishing works for a venue, an operator must connect social accounts via Cognito UI (Settings → Social Connections). One-time per venue. Bridge cannot create OAuth connections.
 - **Files**: `backend/src/lib/social-worker.js`, `backend/db/migrate_018.sql`
 - **Role**: Feature Development
-- **Status**: TODO — depends on BL-045 (do BL-045 first)
+- **Status**: DONE 2026-06-20 — social-worker.js rewritten: when COGNITO_SERVICE_KEY set, calls Cognito social_schedule bridge GCF (POST clubhub-bridge?endpoint=social_schedule&v=1) with venue_id/platforms/content/schedule_at. On 2xx: status='sent' + stores cognito_post_id. On error: status='failed'. When not mapped: leaves pending, logs warn. When key not set: preserves stub behaviour (log + mark sent). migrate_018.sql: added ALTER TABLE social_jobs ADD COLUMN cognito_post_id. content.js: accepts platforms array (default ['facebook']), creates one social_jobs row per platform. ContentNew.tsx: mutation type extended with platforms?, payload sends platforms:['facebook'] when crossPost=true. 0 typecheck errors, 68/68 tests PASS.
 
 ---
 
@@ -403,6 +403,256 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Files**: `backend/src/routes/ai.js` (new), `backend/src/index.js`, `apps/cms-web/src/routes/ContentNew.tsx`
 - **Role**: Feature Development
 - **Status**: DONE 2026-06-20 — Agent 3. ai.js: POST /ai/generate calls Cognito bridge GCF ai_generate endpoint with venue_id + template_slug + context. 501 when unconfigured, 400 for menu_board. Mounted at /ai with injectTenantContext. ContentNew.tsx: "Write for me" button below template selector (hidden for menu_board), merges generated fields into formData (only overwrites empty fields), loading state + error display. 0 typecheck errors. Deployed to production.
+
+---
+
+## AI Image Generation + Image Library (BL-049 → BL-051)
+
+### BL-049 — AI image generation: "Generate image" button on image fields `[M]`
+- **What**: Add AI image generation to any card template with a `type: "image"` field. Operator clicks "Generate image", ClubHub sends a prompt to an AI image API (via Cognito bridge or direct OpenAI), receives a generated image, uploads it to Bunny CDN, stores the Optimizer-parameterised CDN URL in card data. Operator sees the result in live preview and can regenerate or replace.
+- **Architecture**: ClubHub backend → Cognito GCF `?endpoint=ai_image&v=1` (calls DALL-E 3 / Stability AI underneath). Fallback: direct OpenAI API using `OPENAI_API_KEY` env var. Image generated at 1792x1024 (DALL-E 3 landscape), uploaded to Bunny via existing upload-token flow, Optimizer params applied on CDN URL.
+- **Acceptance criteria**:
+  1. `backend/src/routes/ai.js` — new endpoint `POST /ai/generate-image`:
+     - Accepts `{ prompt, template_type, aspect?: "landscape" | "square" }` (default landscape)
+     - Tries Cognito bridge first: `POST COGNITO_GCF_BASE_URL/clubhub-bridge?endpoint=ai_image&v=1` with `{ venue_id, prompt, aspect }` → `{ image_url }`
+     - Fallback if Cognito unavailable: direct OpenAI DALL-E 3 via `OPENAI_API_KEY`
+     - Downloads generated image, uploads to Bunny, returns `{ cdn_url, cdn_url_raw }`
+     - 501 when neither `COGNITO_SERVICE_KEY` nor `OPENAI_API_KEY` is set
+     - Rate limit: max 10 generations per tenant per hour
+  2. `apps/cms-web/src/routes/ContentNew.tsx` — `ImageField` enhanced:
+     - "Generate image" button below file input (hidden when AI unconfigured / 501)
+     - Prompt input defaults to card title + template type
+     - Loading spinner → on success sets `formData[field.key]` to `cdn_url` → preview updates
+     - "Regenerate" button for subsequent attempts
+  3. `backend/.env` gets `OPENAI_API_KEY=` (blank — operator fills in)
+  4. Generated images served through Bunny Optimizer (`?width=1920&height=1080&mode=max&format=webp&quality=85`)
+  5. `pnpm --filter @clubhub/cms-web typecheck` passes
+- **Cost control**: DALL-E 3 standard ~$0.04/image. 10/hour/tenant max = ~$10/day worst case. Acceptable for MVP.
+- **Files**: `backend/src/routes/ai.js`, `apps/cms-web/src/routes/ContentNew.tsx`, `backend/.env`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-24 — ai.js: POST /ai/generate-image calls Cognito bridge ai_image endpoint, downloads generated image, uploads to Bunny CDN, auto-catalogues in media_library. Returns { cdn_url, cdn_url_raw }. 501 when unconfigured, 504 on timeout. ContentNew.tsx ImageField: "Generate image" button (purple accent), opens inline prompt drawer, Enter or click to generate, loading state, auto-hides button on 501. 0 typecheck errors. Deployed to production. Pending: Cognito ai_image GCF endpoint needs to be built on the Cognito side.
+
+---
+
+### BL-050 — Image library: browse and reuse previously uploaded media `[M]`
+- **What**: Every image upload is currently one-off — no reuse across cards. Add a `media_library` table that automatically catalogues every upload, and a library browser in the `ImageField` component so operators can pick from previously uploaded images.
+- **Acceptance criteria**:
+  1. `backend/db/migrate_020.sql`: `CREATE TABLE media_library (id UUID DEFAULT gen_random_uuid() PRIMARY KEY, tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, filename VARCHAR(255) NOT NULL, cdn_url TEXT NOT NULL, cdn_url_raw TEXT NOT NULL, file_size INTEGER, media_type VARCHAR(20) NOT NULL DEFAULT 'image', created_at TIMESTAMPTZ DEFAULT NOW())`. Index on `tenant_id`.
+  2. `backend/src/routes/media.js` — `POST /media/upload-token` updated: after generating the token, insert a row into `media_library` (auto-catalogue every upload). New endpoint `GET /media/library` — returns all media for `req.tenantId`, ordered by `created_at DESC`, paginated (`?limit=50&offset=0`).
+  3. `apps/cms-web/src/routes/ContentNew.tsx` — `ImageField` enhanced:
+     - "Choose from library" button alongside "Choose file" and "Generate image"
+     - Opens modal/drawer with thumbnail grid of previously uploaded images
+     - Click thumbnail → sets `formData[field.key]` to that `cdn_url`
+     - Client-side filename filter
+  4. AI-generated images (BL-049) also auto-catalogued in `media_library`
+  5. `pnpm --filter @clubhub/cms-web typecheck` passes
+- **Files**: `backend/db/migrate_020.sql` (new), `backend/src/routes/media.js`, `apps/cms-web/src/routes/ContentNew.tsx`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-24 — migrate_021.sql (media_library table + tenant index). media.js: POST /media/upload-token auto-catalogues every upload (filename, cdn_url, cdn_url_raw, file_size, media_type). GET /media/library returns tenant-scoped paginated results. ContentNew.tsx ImageField: "Upload file" + "Choose from library" buttons. Library opens as inline drawer with thumbnail grid (80px image previews via Bunny Optimizer), filename filter, click-to-select. 0 typecheck errors. Production: migration applied, library endpoint live, pm2 restarted, frontend deployed.
+
+---
+
+### BL-051 — Default template image fields: add background_image to promo_slide + event_banner `[S]`
+- **What**: The two most-used templates (`promo_slide`, `event_banner`) have no image field — operators can only set a background colour. Add an optional `background_image` field to both via `card_templates` registry. Player-side renderers updated to display `background_image` as full-bleed CSS `background-image: cover` with dark overlay for text legibility. Falls back to `background_color` when no image.
+- **Acceptance criteria**:
+  1. Migration to update `promo_slide` and `event_banner` field_schema: add `{ "key": "background_image", "label": "Background Image", "type": "image", "required": false }`
+  2. `apps/player-ui/src/template-stubs.ts` — `renderCard()` for `promo_slide` / `event_banner`: if `data.background_image` set, render full-bleed `background-image: cover` + dark overlay. Fall back to `background_color`.
+  3. `apps/cms-web/src/routes/ContentPreview.tsx` — preview matches player rendering
+  4. Existing cards without `background_image` render unchanged (no regression)
+  5. Typecheck + build pass for both `cms-web` and `player-ui`
+- **Files**: migration, `apps/player-ui/src/template-stubs.ts`, `apps/cms-web/src/routes/ContentPreview.tsx`
+- **Role**: Feature Development
+- **Status**: TODO — do after BL-049 (AI gen) + BL-050 (library) so operators get the full experience
+
+---
+
+### BL-048 — Dynamic Layout Builder: DB-backed layouts + zone grid editor + visual picker `[L]`
+- **What**: Replace the hardcoded `LAYOUTS` constant in `apps/player-ui/src/layout-definitions.ts` with a DB-backed `layouts` table. Operators can create, edit, and extend screen layouts via a new Layout Builder CMS surface. The 4 existing layouts (`fullscreen`, `split_horizontal`, `news_bar`, `quad`) become editable seed rows. The VenueDashboard layout picker generates visual zone diagrams from layout data rather than hardcoded SVGs.
+
+  **Why this matters**: Fixed layouts cap what venues can display. A pub with a long thin bar screen needs a custom zone split. A hotel lobby needs a 3-zone layout with branding + content + ticker. Operators must be able to define their own zone grids without a code deploy.
+
+  **Layout definition schema** (JSONB column — matches existing `LayoutDefinition` interface in `layout-definitions.ts`):
+  ```json
+  {
+    "grid_areas": "'main'",
+    "grid_rows": "1fr",
+    "grid_cols": "1fr",
+    "playlist_zones": ["main"],
+    "widget_slots": [
+      { "zone": "ticker", "position": "left-fixed", "width": 120, "widget": "clock" },
+      { "zone": "ticker", "position": "fill", "widget": "ticker_scroll", "corpus_key": "ticker_items" }
+    ]
+  }
+  ```
+
+- **Acceptance criteria**:
+
+  **1. Migration `backend/db/migrate_019.sql`**:
+  ```sql
+  CREATE TABLE layouts (
+    slug         VARCHAR(60) PRIMARY KEY,
+    display_name VARCHAR(120) NOT NULL,
+    definition   JSONB NOT NULL,
+    is_system    BOOLEAN NOT NULL DEFAULT false,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+  );
+  INSERT INTO layouts (slug, display_name, is_system, sort_order, definition) VALUES
+    ('fullscreen', 'Full Screen', true, 1,
+     '{"grid_areas":"\"main\"","grid_rows":"1fr","grid_cols":"1fr","playlist_zones":["main"],"widget_slots":[]}'),
+    ('split_horizontal', 'Split Horizontal', true, 2,
+     '{"grid_areas":"\"main_left main_right\" \"ticker ticker\"","grid_rows":"1fr 60px","grid_cols":"1fr 1fr","playlist_zones":["main_left","main_right"],"widget_slots":[{"zone":"ticker","position":"left-fixed","width":120,"widget":"clock"},{"zone":"ticker","position":"fill","widget":"ticker_scroll","corpus_key":"ticker_items"}]}'),
+    ('news_bar', 'News Bar', true, 3,
+     '{"grid_areas":"\"main\" \"ticker\"","grid_rows":"1fr 60px","grid_cols":"1fr","playlist_zones":["main"],"widget_slots":[{"zone":"ticker","position":"left-fixed","width":120,"widget":"clock"},{"zone":"ticker","position":"fill","widget":"ticker_scroll","corpus_key":"ticker_items"}]}'),
+    ('quad', 'Quad', true, 4,
+     '{"grid_areas":"\"top_left top_right\" \"bottom_left bottom_right\"","grid_rows":"1fr 1fr","grid_cols":"1fr 1fr","playlist_zones":["top_left","top_right","bottom_left","bottom_right"],"widget_slots":[]}')
+  ON CONFLICT (slug) DO NOTHING;
+  ```
+
+  **2. Backend `backend/src/routes/layouts.js`** (new, CommonJS):
+  - `GET /layouts` — list all (slug, display_name, is_system, sort_order, definition)
+  - `POST /layouts` — create custom layout; `slug` must be unique, `is_system` forced false
+  - `GET /layouts/:slug` — fetch single layout
+  - `PATCH /layouts/:slug` — update display_name or definition (system layouts can be renamed/edited; cannot be deleted)
+  - `DELETE /layouts/:slug` — allowed only when `is_system = false` AND no screens currently use this slug; return 409 if in use
+  - Mounted at `/layouts` in `backend/src/index.js`
+
+  **3. Backend `/resolve` update**: include `layout_definition` in the resolved corpus payload so the player can read zone/widget config without a separate API call. `manifestEngine.js` or `resolve.js` joins `layouts` on `screen.screen_layout` and appends `layout_definition: layout.definition` to the response.
+
+  **4. `apps/player-ui/src/layout-definitions.ts`** — replace the hardcoded `LAYOUTS` constant with a runtime read from `corpusData.layout_definition` (passed in via `PLAYLIST_UPDATE`). Keep the 4 hardcoded layouts as a **fallback only** (if `layout_definition` is absent — e.g. old corpus). No breaking change to existing deployments.
+
+  **5. Layout Builder CMS surface** (`apps/cms-web/src/routes/LayoutBuilder.tsx`, new):
+  - List view: table of all layouts (name, slug, system badge, zone count, edit/delete buttons)
+  - Create/Edit form:
+    - `display_name` text input
+    - Grid configurator: rows × cols number inputs (max 4×4). Generates a visual grid preview showing clickable cells.
+    - Zone namer: click a cell (or drag-select adjacent cells to merge) → type a zone name. Zone names must be unique within the layout.
+    - Zone type selector per zone: `playlist` (content rotates here) or `widget` (persistent widget)
+    - Widget selector for widget zones: `clock`, `ticker_scroll`, `date_display` (dropdown from registered widgets)
+    - Live preview: 16:9 box showing the current grid with named zone labels and colour-coded zone types
+    - Save → POST/PATCH `/layouts`
+  - System layouts: editable (display_name + definition) but not deletable. Show a lock icon.
+  - Route wired in `App.tsx` at `/layouts`. Nav link added to `AppLayout.tsx` as "Layouts".
+
+  **6. VenueDashboard layout picker** (`apps/cms-web/src/routes/VenueDashboard.tsx`):
+  - Replace the `<select>` dropdown with a visual picker component
+  - Fetches `GET /layouts` on mount
+  - Each layout option renders as a small clickable card: a generated SVG zone diagram (proportional rectangles for each named zone, zone name labels) + display_name below
+  - Selected layout highlighted with a border/accent
+  - On select: PATCH `/screens/:id` with `{ screen_layout: slug }`
+  - The SVG diagram is generated from `definition.grid_areas` / `grid_rows` / `grid_cols` — not hardcoded
+
+  **7. `pnpm --filter @clubhub/cms-web typecheck` passes. `pnpm --filter @clubhub/player-ui build` passes.**
+
+- **Files**:
+  - `backend/db/migrate_019.sql` (new)
+  - `backend/src/routes/layouts.js` (new)
+  - `backend/src/index.js`
+  - `backend/src/routes/resolve.js` (join layouts, append layout_definition)
+  - `apps/player-ui/src/layout-definitions.ts` (corpus-driven, hardcoded as fallback)
+  - `apps/player-ui/src/layout-engine.ts` (read from corpusData.layout_definition)
+  - `apps/cms-web/src/routes/LayoutBuilder.tsx` (new)
+  - `apps/cms-web/src/routes/VenueDashboard.tsx` (visual picker)
+  - `apps/cms-web/src/App.tsx`
+  - `apps/cms-web/src/components/layout/AppLayout.tsx`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-20 — Part 1: migrate_019.sql, layouts.js CRUD, resolve.js layout_definition join. Part 2: layout-definitions.ts getLayoutDefinition() reads corpusData.layout_definition with hardcoded fallback; layout-engine.ts uses getLayoutDefinition(). LayoutBuilder.tsx: list view (table + preview SVG + edit/delete) + editor view (display_name, slug, rows×cols grid, zone names, zone type radio playlist/widget, widget kind+position+width, live preview SVG, validation, POST/PATCH). VenueDashboard.tsx: replaced hardcoded select with visual layout picker (mini SVG per layout, blue=playlist/green=widget, click to PATCH). App.tsx routes /layouts, /layouts/new, /layouts/:slug/edit wired. AppLayout nav link added. 0 typecheck errors. player-ui build PASS. cms-web build PASS. 68/68 backend tests PASS. Deployed to production.
+
+---
+
+### BL-049 — Widget Gallery: DB-backed widget registry + CMS browse/configure surface `[M]`
+- **What**: Widgets (Clock, DateDisplay, TickerScroll) are currently pure code — registered in `apps/player-ui/src/widget-registry.ts` with no DB presence and no CMS visibility. Operators can't see what widgets exist, what they do, or configure their settings outside of editing a layout's widget_slot JSON. This item adds a `widgets` table as the authoritative widget catalogue (mirroring what `card_templates` does for cards), a `GET /widgets` API, a Widget Gallery CMS surface, and wires the Layout Builder to pull widget options from the API instead of a hardcoded dropdown.
+
+  **Pattern**: follows the `card_templates` model (D-019 Tier 2). Widget code ships with the player-ui build; the DB row makes it visible and configurable in the CMS.
+
+  **config_schema structure** (JSONB — defines what settings the operator can provide per widget slot):
+  ```json
+  {
+    "fields": [
+      { "key": "timezone", "label": "Timezone", "type": "select",
+        "options": ["Asia/Singapore","Asia/Bangkok","UTC","Europe/London"], "default": "Asia/Singapore" }
+    ]
+  }
+  ```
+  Clock: timezone field. DateDisplay: timezone + format fields. TickerScroll: speed (px/s), direction (ltr/rtl). Widgets with no configurable settings: `config_schema: { "fields": [] }`.
+
+- **Acceptance criteria**:
+
+  **1. Migration `backend/db/migrate_020.sql`**:
+  ```sql
+  CREATE TABLE widgets (
+    slug         VARCHAR(60) PRIMARY KEY,
+    display_name VARCHAR(120) NOT NULL,
+    description  TEXT,
+    config_schema JSONB NOT NULL DEFAULT '{"fields":[]}',
+    is_system    BOOLEAN NOT NULL DEFAULT true,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+  );
+  INSERT INTO widgets (slug, display_name, description, sort_order, config_schema) VALUES
+    ('clock',        'Clock',         'Live time display. Updates every second.',
+     1, '{"fields":[{"key":"timezone","label":"Timezone","type":"select","options":["Asia/Singapore","Asia/Bangkok","Asia/Tokyo","UTC","Europe/London","America/New_York"],"default":"Asia/Singapore"}]}'),
+    ('date_display', 'Date Display',  'Current date in configurable format.',
+     2, '{"fields":[{"key":"timezone","label":"Timezone","type":"select","options":["Asia/Singapore","Asia/Bangkok","Asia/Tokyo","UTC","Europe/London","America/New_York"],"default":"Asia/Singapore"},{"key":"format","label":"Format","type":"select","options":["DD MMM YYYY","YYYY-MM-DD","dddd DD MMMM"],"default":"DD MMM YYYY"}]}'),
+    ('ticker_scroll','Ticker Scroll', 'Horizontally scrolling text feed. Content authored in Ticker Manager.',
+     3, '{"fields":[{"key":"speed","label":"Scroll Speed (px/s)","type":"number","min":20,"max":200,"default":80},{"key":"direction","label":"Direction","type":"select","options":["ltr","rtl"],"default":"ltr"}]}')
+  ON CONFLICT (slug) DO NOTHING;
+  ```
+
+  **2. `backend/src/routes/widgets.js`** (new, CommonJS):
+  - `GET /widgets` — list all, ordered by `sort_order`. Returns slug, display_name, description, config_schema, is_system.
+  - `GET /widgets/:slug` — single widget detail.
+  - No POST/DELETE for now — widgets are code-shipped. `is_system = true` on all seeds; a future super-admin endpoint can add custom widget stubs.
+  - Mounted at `/widgets` in `backend/src/index.js`.
+
+  **3. `apps/cms-web/src/routes/WidgetGallery.tsx`** (new):
+  - Fetches `GET /widgets` on mount.
+  - Grid of widget cards — each card shows: display_name, description, a static visual preview (see below), and a "Used in N layouts" count (derived from scanning `GET /layouts` response for `widget_slots` referencing this slug).
+  - **Static visual previews** (inline SVG or styled div — no live widget execution in CMS):
+    - `clock`: a circle with clock hands at a fixed time (e.g. 10:10), or simply `12:34` in a clean monospace font on dark background
+    - `date_display`: `Fri 20 Jun` text on dark background
+    - `ticker_scroll`: a horizontal bar with `"Breaking news · Specials tonight · Happy hour 5–7pm ···"` text, arrow indicating scroll direction
+  - Clicking a widget card opens a detail panel (right side or modal):
+    - Full description
+    - Config fields from `config_schema.fields` rendered read-only (showing defaults) — same field rendering as card template form but read-only
+    - "Layouts using this widget" list with links to `/layouts/:slug/edit`
+  - Route: `/widgets`. Nav link "Widgets" in `AppLayout.tsx`.
+  - `pnpm --filter @clubhub/cms-web typecheck` passes.
+
+  **4. Layout Builder integration** (`apps/cms-web/src/routes/LayoutBuilder.tsx`):
+  - Currently the widget kind dropdown is hardcoded (`clock`, `ticker_scroll`, `date_display`).
+  - Replace with a fetch of `GET /widgets` — render the dropdown from API response (`display_name` as label, `slug` as value).
+  - When a widget is selected for a zone, render its `config_schema.fields` as editable inputs below the dropdown (same SchemaFields pattern as card templates). Store field values in the widget_slot's `config` key in the layout definition JSONB:
+    ```json
+    { "zone": "ticker", "position": "fill", "widget": "ticker_scroll",
+      "corpus_key": "ticker_items", "config": { "speed": 80, "direction": "ltr" } }
+    ```
+  - Default values from `config_schema` pre-populate when a widget is first selected.
+
+  **5. Player-ui widget config** (`apps/player-ui/src/layout-engine.ts`):
+  - When instantiating a widget via `instantiateWidget(slot.widget, slotDiv, config)`, merge `slot.config ?? {}` into the config object passed to the factory. Widgets already accept a `config` param — they just need the values passed through.
+  - `clock.ts` and `date_display.ts`: read `config.timezone` if present (use `Intl.DateTimeFormat` with the timezone option). Fall back to `Asia/Singapore`.
+  - `ticker-scroll.ts`: read `config.speed` (default 80) and `config.direction` (default `ltr`).
+
+  **6.** Wire route and nav:
+  - `apps/cms-web/src/App.tsx` — add `/widgets` route
+  - `apps/cms-web/src/components/layout/AppLayout.tsx` — add "Widgets" nav link
+  - `pnpm --filter @clubhub/cms-web typecheck` passes. `pnpm --filter @clubhub/player-ui build` passes. Deploy to production.
+
+- **Files**:
+  - `backend/db/migrate_020.sql` (new)
+  - `backend/src/routes/widgets.js` (new)
+  - `backend/src/index.js`
+  - `apps/cms-web/src/routes/WidgetGallery.tsx` (new)
+  - `apps/cms-web/src/routes/LayoutBuilder.tsx` (widget dropdown from API + config fields)
+  - `apps/player-ui/src/layout-engine.ts` (pass slot.config to widget factory)
+  - `apps/player-ui/src/widgets/clock.ts` (timezone config)
+  - `apps/player-ui/src/widgets/date-display.ts` (timezone + format config)
+  - `apps/player-ui/src/widgets/ticker-scroll.ts` (speed + direction config)
+  - `apps/cms-web/src/App.tsx`
+  - `apps/cms-web/src/components/layout/AppLayout.tsx`
+- **Role**: Feature Development
+- **Status**: DONE 2026-06-24 — migrate_020.sql applied (widgets table + 3 system seeds: clock, date_display, ticker_scroll with config_schema). widgets.js route (GET /widgets, GET /widgets/:slug) mounted. WidgetGallery.tsx: card grid with static previews (clock/date/ticker), detail panel with config schema + layout usage links. LayoutBuilder.tsx: widget dropdown from API + WidgetConfigFields for per-zone config. layout-engine.ts: slot.config merged into widget factory config. clock.ts/date-display.ts: timezone config via Intl.DateTimeFormat. ticker-scroll.ts: speed + direction config. App.tsx + AppLayout.tsx wired. 0 typecheck errors. player-ui build PASS. Production: migration applied, GET /widgets returns 3 rows, pm2 restarted.
 
 ---
 
@@ -688,8 +938,6 @@ Pick from the top of the active list. Mark status inline when starting/finishing
 - **Files**: `migrate_012.sql`, `ticker.js`, `resolve.js`, `widgets/ticker-scroll.ts`, `TickerManager.tsx`
 - **Role**: Feature Development — Agent 3
 - **Status**: DONE 2026-06-20 — Agent 3. ticker_items table, CRUD API, /resolve delivery, ticker_scroll widget, TickerManager CMS. Smoke test: ticker_items flows through /resolve to player.
-- **Role**: Feature Development — Agent 3
-- **Status**: TODO
 
 ---
 

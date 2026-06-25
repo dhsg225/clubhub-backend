@@ -37,17 +37,24 @@ interface Screen {
 }
 
 /* ------------------------------------------------------------------ *
- * Layout constants
+ * Layout types (fetched from GET /layouts)
  * ------------------------------------------------------------------ */
 
-const LAYOUT_OPTIONS = ['fullscreen', 'split_horizontal', 'news_bar', 'quad'] as const;
+interface LayoutDefinition {
+  grid_areas: string;
+  grid_rows: string;
+  grid_cols: string;
+  playlist_zones: string[];
+  widget_slots: { zone: string; position: string; width?: number; widget: string; corpus_key?: string }[];
+}
 
-const LAYOUT_LABELS: Record<string, string> = {
-  fullscreen:       'Full Screen',
-  split_horizontal: 'Split Horizontal',
-  news_bar:         'News Bar',
-  quad:             'Quad',
-};
+interface LayoutRow {
+  slug: string;
+  display_name: string;
+  definition: LayoutDefinition;
+  is_system: boolean;
+  sort_order: number;
+}
 
 /* ------------------------------------------------------------------ *
  * Helpers
@@ -178,11 +185,13 @@ function ScreenRow({
   layoutSelection,
   onLayoutChange,
   layoutError,
+  layouts,
 }: {
   screen: Screen;
   layoutSelection: string;
   onLayoutChange: (screenId: string, value: string) => void;
   layoutError: string | null;
+  layouts: LayoutRow[];
 }): JSX.Element {
   const hours = hoursSinceContact(screen.last_corpus_sync_at);
   const isExpiredAutonomy = hours !== null && hours > AUTONOMY_WINDOW_HOURS;
@@ -194,12 +203,10 @@ function ScreenRow({
     }}>
       <td style={tdStyle}>
         <div style={{ fontWeight: 500, color: '#111827' }}>{screen.name ?? screen.id}</div>
-        {screen.name && (
-          <div style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '0.1rem' }}>{screen.id}</div>
-        )}
+        <div style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '0.1rem', fontFamily: 'monospace' }}>{screen.id}</div>
         {screen.screen_group && (
-          <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '0.1rem' }}>
-            {screen.screen_group}
+          <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '0.15rem' }}>
+            Group: {screen.screen_group}
           </div>
         )}
       </td>
@@ -216,26 +223,100 @@ function ScreenRow({
         />
       </td>
       <td style={tdStyle}>
-        <select
-          value={layoutSelection}
-          onChange={(e) => onLayoutChange(screen.id, e.target.value)}
-          style={{
-            fontSize: '0.8rem', padding: '0.2rem 0.4rem',
-            border: '1px solid #d1d5db', borderRadius: '4px',
-            color: '#111827', backgroundColor: '#fff',
-            fontFamily: 'system-ui, sans-serif',
-          }}
-        >
-          {LAYOUT_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>{LAYOUT_LABELS[opt]}</option>
-          ))}
-        </select>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+          {layouts.map((layout) => {
+            const selected = layoutSelection === layout.slug;
+            return (
+              <button
+                key={layout.slug}
+                type="button"
+                title={layout.display_name}
+                onClick={() => onLayoutChange(screen.id, layout.slug)}
+                style={{
+                  padding: '0.2rem', border: selected ? '2px solid #1d4ed8' : '1px solid #d1d5db',
+                  borderRadius: '4px', cursor: 'pointer', backgroundColor: selected ? '#eff6ff' : '#fff',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem',
+                }}
+              >
+                <MiniLayoutSvg definition={layout.definition} w={56} h={32} />
+                <span style={{ fontSize: '0.58rem', color: selected ? '#1d4ed8' : '#6b7280', fontWeight: selected ? 700 : 400, whiteSpace: 'nowrap' }}>
+                  {layout.display_name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         {layoutError && (
           <div style={{ marginTop: '0.2rem', fontSize: '0.7rem', color: '#991b1b' }}>{layoutError}</div>
         )}
       </td>
+      <td style={{ ...tdStyle, textAlign: 'center' }}>
+        <button
+          type="button"
+          onClick={() => window.open(`/preview/screen/${screen.id}`, '_blank', 'width=1280,height=720')}
+          style={{ fontSize: '0.75rem', fontWeight: 600, color: '#1d4ed8', background: 'none', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '0.25rem 0.5rem', cursor: 'pointer', backgroundColor: '#eff6ff', whiteSpace: 'nowrap' }}
+        >
+          ▶
+        </button>
+      </td>
     </tr>
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Mini layout SVG — generated from grid_areas definition
+ * ------------------------------------------------------------------ */
+
+function MiniLayoutSvg({ definition, w, h }: { definition: LayoutDefinition; w: number; h: number }): JSX.Element {
+  const gridRows = parseGridRows(definition.grid_areas);
+  const rowCount = gridRows.length || 1;
+  const colCount = gridRows[0]?.length || 1;
+  const cellW = w / colCount;
+  const cellH = h / rowCount;
+  const rects = mergeZoneRects(gridRows, cellW, cellH);
+  const pzSet = new Set(definition.playlist_zones);
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <rect width={w} height={h} fill="#1e293b" rx={2} />
+      {rects.map((r) => (
+        <g key={r.name}>
+          <rect x={r.x + 0.5} y={r.y + 0.5} width={r.w - 1} height={r.h - 1} rx={1}
+            fill={pzSet.has(r.name) ? '#3b82f6' : '#10b981'} opacity={0.7} />
+          {r.w > 14 && (
+            <text x={r.x + r.w / 2} y={r.y + r.h / 2} textAnchor="middle" dominantBaseline="central"
+              fill="#fff" fontSize={Math.min(7, r.w / Math.max(r.name.length, 1) * 1.2)} fontFamily="system-ui">
+              {r.name.length > 6 ? r.name.slice(0, 5) + '…' : r.name}
+            </text>
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function parseGridRows(gridAreas: string): string[][] {
+  const rows: string[][] = [];
+  const matches = gridAreas.match(/"([^"]+)"/g);
+  if (!matches) return [['main']];
+  for (const m of matches) rows.push(m.replace(/"/g, '').trim().split(/\s+/));
+  return rows;
+}
+
+function mergeZoneRects(grid: string[][], cellW: number, cellH: number): { name: string; x: number; y: number; w: number; h: number }[] {
+  const seen = new Map<string, { r1: number; c1: number; r2: number; c2: number }>();
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+      const name = grid[r]![c]!;
+      const ex = seen.get(name);
+      if (ex) { ex.r2 = Math.max(ex.r2, r); ex.c2 = Math.max(ex.c2, c); }
+      else seen.set(name, { r1: r, c1: c, r2: r, c2: c });
+    }
+  }
+  return [...seen.entries()].map(([name, b]) => ({
+    name, x: b.c1 * cellW, y: b.r1 * cellH,
+    w: (b.c2 - b.c1 + 1) * cellW, h: (b.r2 - b.r1 + 1) * cellH,
+  }));
 }
 
 /* ------------------------------------------------------------------ *
@@ -263,6 +344,14 @@ export function Component(): JSX.Element {
       queryFn: () => api.get<Screen[]>(`/screens?venue_id=${venueId}`),
       enabled: !!venueId,
     });
+
+  // BL-048: fetch available layouts for the visual picker
+  const { data: availableLayouts } = useQuery<LayoutRow[]>({
+    queryKey: ['layouts'],
+    queryFn: () => api.get<LayoutRow[]>('/layouts'),
+    staleTime: 60_000,
+  });
+  const layouts = availableLayouts ?? [];
 
   const { mutate: patchLayout } = useMutation({
     mutationFn: ({ screenId, screen_layout }: { screenId: string; screen_layout: string }) =>
@@ -340,7 +429,7 @@ export function Component(): JSX.Element {
         {/* Summary chips — only shown when screens loaded */}
         {!screensLoading && !screensError && (
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <SummaryChip label={`${screenCount} screen${screenCount !== 1 ? 's' : ''}`} colour="#6b7280" />
+            <SummaryChip label={`${screenCount} location${screenCount !== 1 ? 's' : ''}`} colour="#6b7280" />
             {recoveredUntrustedCount > 0 && (
               <SummaryChip label={`${recoveredUntrustedCount} RECOVERED_BUT_UNTRUSTED`} colour="#9a3412" />
             )}
@@ -353,10 +442,10 @@ export function Component(): JSX.Element {
 
       {/* Screens section */}
       <section>
-        <h2 style={sectionHeading}>Screens</h2>
+        <h2 style={sectionHeading}>Locations</h2>
 
         {screensLoading && (
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Loading screens…</p>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Loading locations…</p>
         )}
 
         {screensError && (
@@ -364,12 +453,12 @@ export function Component(): JSX.Element {
             padding: '0.875rem 1rem', backgroundColor: '#fef2f2',
             border: '1px solid #fecaca', borderRadius: '6px', color: '#991b1b', fontSize: '0.875rem',
           }}>
-            Failed to load screens: {screensErr instanceof Error ? screensErr.message : String(screensErr)}
+            Failed to load locations: {screensErr instanceof Error ? screensErr.message : String(screensErr)}
           </div>
         )}
 
         {!screensLoading && !screensError && screenCount === 0 && (
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>No screens enrolled for this venue.</p>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>No locations enrolled for this venue.</p>
         )}
 
         {!screensLoading && !screensError && screenCount > 0 && (
@@ -377,11 +466,12 @@ export function Component(): JSX.Element {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={thStyle}>Screen</th>
+                  <th style={thStyle}>Location</th>
                   <th style={thStyle}>72h Autonomy Clock</th>
                   <th style={thStyle}>Content Readiness</th>
                   <th style={thStyle}>Assets (verified/required)</th>
                   <th style={thStyle}>Layout</th>
+                  <th style={{ ...thStyle, width: '50px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -392,6 +482,7 @@ export function Component(): JSX.Element {
                     layoutSelection={layoutSelections[screen.id] ?? screen.screen_layout ?? 'fullscreen'}
                     onLayoutChange={handleLayoutChange}
                     layoutError={layoutErrors[screen.id] ?? null}
+                    layouts={layouts}
                   />
                 ))}
               </tbody>

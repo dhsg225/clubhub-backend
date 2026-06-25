@@ -7,4 +7,10 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: true,
   },
+  server: {
+    proxy: {
+      '/sponsor': 'http://localhost:4000',
+      '/media': 'http://localhost:4000',
+    },
+  },
 });

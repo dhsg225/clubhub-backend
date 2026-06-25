@@ -18,6 +18,7 @@
  * - Asset URL expiry tracked; urgent sync triggered when URLs near expiry
  * - Backoff counter exposed in player state for fleet health reporting
  */
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { PlayerConfig, PlayerState, ReplayPacket } from './types.js';
 import { CorpusCacheManager } from './corpus-cache.js';
@@ -32,6 +33,7 @@ import { ReconnectBackoff } from './reconnect-backoff.js';
 import { AssetUrlManager } from './asset-url-manager.js';
 import { AssetDownloadManager } from './asset-download-manager.js';
 import { RemoteCommandPoller, type CommandExecutionCallbacks } from './remote-command-poller.js';
+import { AssetManager } from './asset-manager.js';
 import type { ChromiumLauncher } from './chromium-launcher.js';
 
 // Re-export for convenience
@@ -51,6 +53,7 @@ export class PlayerOrchestrator {
   private readonly reconnectBackoff: ReconnectBackoff;
   private readonly assetUrlManager: AssetUrlManager;
   private readonly downloadManager: AssetDownloadManager;
+  private readonly assetManager: AssetManager;
   private readonly commandPoller: RemoteCommandPoller | null;
   private readonly cleanupFns: Array<() => void> = [];
 
@@ -106,6 +109,7 @@ export class PlayerOrchestrator {
 
     this.assetUrlManager = new AssetUrlManager();
     this.downloadManager = new AssetDownloadManager(config.asset_dir, this.assetVerifier);
+    this.assetManager = new AssetManager(config.asset_dir);
 
     this.playlistPoller = new PlaylistPoller(
       config.cms_api_url,
@@ -185,6 +189,12 @@ export class PlayerOrchestrator {
 
   async start(): Promise<void> {
     console.log(`[orchestrator] Starting player screen_id=${this.config.screen_id}`);
+
+    // Ensure fallback image exists in asset dir (copy from bundled assets if missing)
+    this.ensureFallbackImage();
+
+    // Boot-time asset integrity scan — purge .tmp fragments + zero-byte corruption (FM-09)
+    this.assetManager.bootIntegrityScan();
 
     // Load cached corpus — enables offline operation immediately at boot
     const loadResult = this.corpusCache.load();
@@ -353,6 +363,31 @@ export class PlayerOrchestrator {
     }
   }
 
+  /** Copy bundled fallback-default.webp to asset dir if not already present. */
+  private ensureFallbackImage(): void {
+    const dest = path.join(this.config.asset_dir, 'fallback-default.webp');
+    if (fs.existsSync(dest)) return;
+
+    // Look for bundled fallback relative to the package root
+    const candidates = [
+      path.join(__dirname, '../assets/fallback-default.webp'),  // dev: src/../assets
+      path.join(__dirname, '../../assets/fallback-default.webp'), // dist: dist/../assets
+      '/opt/clubhub/player-runtime/assets/fallback-default.webp', // production install
+    ];
+
+    for (const src of candidates) {
+      try {
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dest);
+          console.log(`[orchestrator] Fallback image deployed: ${src} → ${dest}`);
+          return;
+        }
+      } catch { /* try next */ }
+    }
+
+    console.warn('[orchestrator] No bundled fallback-default.webp found — screens will show remote URL on asset failure');
+  }
+
   private async pollPlaylist(): Promise<void> {
     if (!this.config.cms_api_url) {
       console.warn('[orchestrator] No CMS API URL — skipping playlist poll');
@@ -362,10 +397,29 @@ export class PlayerOrchestrator {
     const resolved = await this.playlistPoller.poll();
 
     if (resolved !== null) {
+      // BL-043: pre-download media_url assets for 72h offline autonomy
+      const { zones: syncedZones, stats: assetStats } = await this.assetManager.syncZones(
+        resolved.zones ?? { main: resolved.playlist },
+      );
+      // Also sync the flat playlist for backward compat
+      const { items: syncedPlaylist } = await this.assetManager.syncAssets(resolved.playlist);
+      // Update resolved with synced data
+      const resolvedWithAssets: typeof resolved = {
+        ...resolved,
+        zones: syncedZones,
+        playlist: syncedPlaylist,
+      };
+      // Update heartbeat counters
+      this.state.assets_required_count = assetStats.required;
+      this.state.assets_verified_count = assetStats.verified;
+
+      // Replace resolved reference for downstream processing
+      const resolved_final = resolvedWithAssets;
+
       // Validation-first (ADR-002): enrich items per zone.
       // Data-driven items (template_type present) need no local asset — pass through as-is.
       // Asset-based items must have a verified local asset before being sent to the player.
-      const enrichZoneItems = (items: typeof resolved.playlist) =>
+      const enrichZoneItems = (items: typeof resolved_final.playlist) =>
         items
           .filter(item =>
             item.template_type
@@ -381,16 +435,16 @@ export class PlayerOrchestrator {
 
       // Build enriched zones map
       const enrichedZones: Record<string, unknown[]> = {};
-      for (const [zoneName, zoneItems] of Object.entries(resolved.zones ?? {})) {
+      for (const [zoneName, zoneItems] of Object.entries(resolved_final.zones ?? {})) {
         enrichedZones[zoneName] = enrichZoneItems(zoneItems);
       }
       // Ensure main zone always present (backward compat)
       if (!enrichedZones['main']) {
-        enrichedZones['main'] = enrichZoneItems(resolved.playlist);
+        enrichedZones['main'] = enrichZoneItems(resolved_final.playlist);
       }
 
       const totalItems = Object.values(enrichedZones).reduce((s, a) => s + a.length, 0);
-      const totalResolved = resolved.playlist.length;
+      const totalResolved = resolved_final.playlist.length;
       if (totalItems === 0 && totalResolved > 0) {
         console.warn(
           `[orchestrator] 0/${totalResolved} playlist items ready (assets downloading or data-driven empty)`,
@@ -398,19 +452,19 @@ export class PlayerOrchestrator {
       }
 
       this.emergencyRenderer.sendPlaylistUpdate(
-        resolved.playlist_checksum,
-        resolved.screen_layout ?? 'fullscreen',
+        resolved_final.playlist_checksum,
+        resolved_final.screen_layout ?? 'fullscreen',
         enrichedZones,
-        { ticker_items: resolved.ticker_items ?? [] },
+        { ticker_items: resolved_final.ticker_items ?? [] },
       );
 
       const packet = {
-        packet_id:        resolved._meta.correlation_id,
-        screen_id:        resolved.screen_id,
-        at:               resolved._meta.at_utc_ms,
-        resolution_level: resolved.resolution_level,
-        playlist_checksum: resolved.playlist_checksum,
-        is_fallback:      resolved.is_fallback,
+        packet_id:        resolved_final._meta.correlation_id,
+        screen_id:        resolved_final.screen_id,
+        at:               resolved_final._meta.at_utc_ms,
+        resolution_level: resolved_final.resolution_level,
+        playlist_checksum: resolved_final.playlist_checksum,
+        is_fallback:      resolved_final.is_fallback,
         written_at:       Date.now(),
         synced:           false,
       };
@@ -424,12 +478,12 @@ export class PlayerOrchestrator {
 
       this.state = {
         ...this.state,
-        last_resolution_level: resolved.resolution_level,
+        last_resolution_level: resolved_final.resolution_level,
       };
 
       console.log(
-        `[orchestrator] Playlist updated checksum=${resolved.playlist_checksum} ` +
-        `level=${resolved.resolution_level} fallback=${resolved.is_fallback}`
+        `[orchestrator] Playlist updated checksum=${resolved_final.playlist_checksum} ` +
+        `level=${resolved_final.resolution_level} fallback=${resolved_final.is_fallback}`
       );
     } else {
       const cachedPlaylist = this.playlistPoller.getLastPlaylist();

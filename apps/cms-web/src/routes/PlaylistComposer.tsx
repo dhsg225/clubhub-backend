@@ -2,12 +2,8 @@
  * Playlist Composer — create or edit a named playlist.
  * Routes: /playlists/new (create) and /playlists/:id (edit)
  *
- * Both use the same component. When id is absent (or 'new'), creates.
- * Otherwise loads GET /named_playlists/:id and pre-populates.
- *
- * D-013: Card → Playlist → Schedule → Screen content hierarchy.
- * Cards (from GET /content) are added to an ordered list with per-card duration.
- * ▲/▼ buttons reorder; × removes. No drag-and-drop (prohibited by D-013).
+ * Single-column layout: header → settings → [+ Add cards] drawer → timeline → card list → save.
+ * The "Add cards" panel opens as a stamp grid overlay — click a stamp to add it to the playlist.
  */
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -41,7 +37,6 @@ interface NamedPlaylist {
   updated_at: string;
 }
 
-/* Slim shape returned by GET /content */
 interface ContentItem {
   id: string;
   template_type: string;
@@ -72,14 +67,35 @@ const BADGE_COLORS: Record<string, string> = {
   daily_specials: '#DC2626',
 };
 
-function TemplateDot({ type }: { type: string }): JSX.Element {
-  const color = BADGE_COLORS[type] ?? '#6b7280';
+/** Tiny 16:9 preview stamp */
+function CardStamp({ card, size = 'md' }: {
+  card: { template_type: string; data: Record<string, unknown> | null };
+  size?: 'sm' | 'md';
+}): JSX.Element {
+  const d = card.data ?? {};
+  const bg = (d.background_color as string) || BADGE_COLORS[card.template_type] || '#374151';
+  const textColor = (d.text_color as string) || '#ffffff';
+  const title = cardTitle(card);
+  const w = size === 'sm' ? '48px' : '56px';
+  const h = size === 'sm' ? '27px' : '32px';
+  const fs = size === 'sm' ? '0.35rem' : '0.4rem';
+
   return (
-    <span style={{
-      display: 'inline-block', width: '8px', height: '8px',
-      borderRadius: '50%', backgroundColor: color, flexShrink: 0,
-      marginTop: '0.15rem',
-    }} title={type} />
+    <div style={{
+      width: w, height: h, flexShrink: 0,
+      borderRadius: '3px', overflow: 'hidden',
+      backgroundColor: bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      border: '1px solid rgba(0,0,0,0.1)',
+    }}>
+      <span style={{
+        color: textColor, fontSize: fs, fontWeight: 700,
+        textAlign: 'center', lineHeight: 1.15,
+        padding: '0 2px', overflow: 'hidden', maxHeight: '100%',
+        wordBreak: 'break-word',
+      }}>
+        {title.length > 20 ? title.slice(0, 18) + '…' : title}
+      </span>
+    </div>
   );
 }
 
@@ -98,306 +114,107 @@ function TemplateBadge({ type }: { type: string }): JSX.Element {
 }
 
 /* ================================================================== *
- * Card picker (left panel)
+ * Add Cards drawer — stamp grid overlay
  * ================================================================== */
 
-function CardPicker({
-  cards,
-  isLoading,
-  isError,
-  addedIds,
-  onAdd,
+function AddCardsDrawer({
+  cards, isLoading, isError, addedIds, onAdd, onClose,
 }: {
   cards: ContentItem[];
   isLoading: boolean;
   isError: boolean;
   addedIds: Set<string>;
   onAdd: (card: ContentItem) => void;
+  onClose: () => void;
 }): JSX.Element {
+  const available = cards.filter((c) => !addedIds.has(c.id));
+  const alreadyAdded = cards.filter((c) => addedIds.has(c.id));
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-      <div style={{ marginBottom: '0.75rem' }}>
-        <h2 style={sectionHeading}>Available cards</h2>
-        <p style={{ margin: 0, fontSize: '0.78rem', color: '#6b7280' }}>
-          Click to add to the playlist. Each card can only appear once.
-        </p>
+    <div style={{
+      border: '1px solid #bfdbfe', borderRadius: '8px',
+      backgroundColor: '#f0f7ff', padding: '1rem', marginBottom: '1rem',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e40af' }}>
+          Add cards to playlist
+        </span>
+        <button type="button" onClick={onClose} style={{
+          padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontWeight: 600,
+          color: '#6b7280', backgroundColor: '#fff', border: '1px solid #d1d5db',
+          borderRadius: '4px', cursor: 'pointer',
+        }}>
+          Done
+        </button>
       </div>
 
-      {isLoading && <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>Loading cards…</p>}
-      {isError && (
-        <div role="alert" style={{
-          padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2',
-          border: '1px solid #fecaca', borderRadius: '5px',
-          color: '#991b1b', fontSize: '0.8rem',
-        }}>
-          Failed to load cards
-        </div>
-      )}
+      {isLoading && <p style={{ color: '#6b7280', fontSize: '0.8rem' }}>Loading cards…</p>}
+      {isError && <p style={{ color: '#991b1b', fontSize: '0.8rem' }}>Failed to load cards</p>}
 
       {!isLoading && !isError && cards.length === 0 && (
-        <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem' }}>
+        <p style={{ color: '#9ca3af', fontSize: '0.8rem' }}>
           No cards yet. <Link to="/content/new" style={{ color: '#1d4ed8' }}>Create a card</Link> first.
         </p>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-        {cards.map((card) => {
-          const already = addedIds.has(card.id);
-          return (
-            <div
+      {/* Available cards — stamp grid */}
+      {available.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {available.map((card) => (
+            <button
               key={card.id}
+              type="button"
+              onClick={() => onAdd(card)}
+              title={`Add: ${cardTitle(card)}`}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
-                padding: '0.5rem 0.625rem', border: '1px solid #e5e7eb', borderRadius: '6px',
-                backgroundColor: already ? '#f9fafb' : '#fff',
-                opacity: already ? 0.5 : 1,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem',
+                padding: '0.35rem', border: '1px solid #d1d5db', borderRadius: '6px',
+                backgroundColor: '#fff', cursor: 'pointer', width: '80px',
+                transition: 'border-color 0.15s',
               }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#3b82f6'; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#d1d5db'; }}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', minWidth: 0 }}>
-                <TemplateDot type={card.template_type} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{
-                    fontSize: '0.8rem', fontWeight: 500, color: '#111827',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {cardTitle(card)}
-                  </div>
-                  <div style={{ marginTop: '0.1rem' }}>
-                    <TemplateBadge type={card.template_type} />
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={already}
-                onClick={() => onAdd(card)}
-                style={{
-                  flexShrink: 0, padding: '0.25rem 0.6rem',
-                  fontSize: '0.75rem', fontWeight: 600,
-                  color: already ? '#9ca3af' : '#1d4ed8',
-                  backgroundColor: already ? '#f3f4f6' : '#eff6ff',
-                  border: `1px solid ${already ? '#e5e7eb' : '#bfdbfe'}`,
-                  borderRadius: '4px', cursor: already ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {already ? 'Added' : '+ Add'}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================== *
- * Playlist editor (right panel)
- * ================================================================== */
-
-function PlaylistEditor({
-  name, onNameChange,
-  orderingRule, onOrderingRuleChange,
-  items, onItemsChange,
-  onSave, isSaving, saveError,
-  isEdit,
-}: {
-  name: string;
-  onNameChange: (v: string) => void;
-  orderingRule: OrderingRule;
-  onOrderingRuleChange: (v: OrderingRule) => void;
-  items: PlaylistItem[];
-  onItemsChange: (items: PlaylistItem[]) => void;
-  onSave: () => void;
-  isSaving: boolean;
-  saveError: string | null;
-  isEdit: boolean;
-}): JSX.Element {
-  function move(index: number, direction: -1 | 1): void {
-    const next = [...items];
-    const swap = index + direction;
-    if (swap < 0 || swap >= next.length) return;
-    const tmp = next[index]!;
-    next[index] = next[swap]!;
-    next[swap] = tmp;
-    onItemsChange(next);
-  }
-
-  function remove(index: number): void {
-    onItemsChange(items.filter((_, i) => i !== index));
-  }
-
-  function updateDuration(index: number, value: string): void {
-    const secs = Math.max(5, Math.min(300, parseInt(value, 10) || 10));
-    onItemsChange(items.map((it, i) => i === index ? { ...it, duration_seconds: secs } : it));
-  }
-
-  return (
-    <div>
-      <h2 style={sectionHeading}>{isEdit ? 'Edit playlist' : 'New playlist'}</h2>
-
-      {/* Name */}
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={labelStyle}>Playlist name</label>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => onNameChange(e.target.value)}
-          maxLength={120}
-          placeholder="e.g. Evening Bar Loop"
-          style={inputStyle}
-        />
-        <span style={{ fontSize: '0.7rem', color: name.length > 110 ? '#dc2626' : '#9ca3af' }}>
-          {name.length}/120
-        </span>
-      </div>
-
-      {/* Ordering rule */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <label style={labelStyle}>Ordering</label>
-        <select
-          value={orderingRule}
-          onChange={(e) => onOrderingRuleChange(e.target.value as OrderingRule)}
-          style={{ ...inputStyle, cursor: 'pointer' }}
-        >
-          <option value="sequential">Sequential — plays in order, loops</option>
-          <option value="shuffle">Shuffle — randomises on each loop</option>
-        </select>
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: '1px', backgroundColor: '#e5e7eb', marginBottom: '1rem' }} />
-
-      {/* Item list */}
-      <div style={{ marginBottom: '1rem' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-          {items.length} {items.length === 1 ? 'card' : 'cards'} in playlist
-        </div>
-
-        {items.length === 0 && (
-          <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem' }}>
-            No cards added yet — use the card picker on the left.
-          </p>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-          {items.map((item, i) => (
-            <div
-              key={item.content_id}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.5rem 0.625rem', border: '1px solid #e5e7eb', borderRadius: '6px',
-                backgroundColor: '#fff',
-              }}
-            >
-              {/* Position number */}
+              <CardStamp card={card} size="sm" />
               <span style={{
-                flexShrink: 0, width: '1.5rem', height: '1.5rem',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af',
-                backgroundColor: '#f3f4f6', borderRadius: '4px',
+                fontSize: '0.6rem', color: '#374151', fontWeight: 500,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                width: '100%', textAlign: 'center',
               }}>
-                {i + 1}
+                {cardTitle(card)}
               </span>
-
-              {/* Card info */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  {item.card && <TemplateDot type={item.card.template_type} />}
-                  <span style={{
-                    fontSize: '0.8rem', fontWeight: 500, color: '#111827',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {item.card ? cardTitle(item.card) : item.content_id}
-                  </span>
-                </div>
-                {item.card && (
-                  <div style={{ marginTop: '0.1rem' }}>
-                    <TemplateBadge type={item.card.template_type} />
-                  </div>
-                )}
-              </div>
-
-              {/* Duration */}
-              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <input
-                  type="number"
-                  min={5}
-                  max={300}
-                  value={item.duration_seconds}
-                  onChange={(e) => updateDuration(i, e.target.value)}
-                  style={{
-                    width: '52px', padding: '0.25rem 0.3rem',
-                    border: '1px solid #d1d5db', borderRadius: '4px',
-                    fontSize: '0.78rem', textAlign: 'right',
-                    fontFamily: 'system-ui, sans-serif',
-                  }}
-                />
-                <span style={{ fontSize: '0.68rem', color: '#9ca3af' }}>s</span>
-              </div>
-
-              {/* Reorder + remove */}
-              <div style={{ flexShrink: 0, display: 'flex', gap: '0.2rem' }}>
-                <button
-                  type="button"
-                  onClick={() => move(i, -1)}
-                  disabled={i === 0}
-                  style={iconBtnStyle(i === 0)}
-                  aria-label="Move up"
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(i, 1)}
-                  disabled={i === items.length - 1}
-                  style={iconBtnStyle(i === items.length - 1)}
-                  aria-label="Move down"
-                >
-                  ▼
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(i)}
-                  style={{
-                    ...iconBtnStyle(false),
-                    color: '#dc2626', backgroundColor: '#fef2f2', borderColor: '#fecaca',
-                  }}
-                  aria-label="Remove"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
+              <span style={{ fontSize: '0.55rem', color: BADGE_COLORS[card.template_type] ?? '#6b7280', fontWeight: 600 }}>
+                {card.template_type.replace(/_/g, ' ')}
+              </span>
+            </button>
           ))}
-        </div>
-      </div>
-
-      {/* Save error */}
-      {saveError && (
-        <div role="alert" style={{
-          padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2',
-          border: '1px solid #fecaca', borderRadius: '5px',
-          color: '#991b1b', fontSize: '0.8rem', marginBottom: '0.75rem',
-        }}>
-          {saveError}
         </div>
       )}
 
-      {/* Save button */}
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={isSaving}
-        style={{
-          width: '100%', padding: '0.65rem 1.25rem',
-          backgroundColor: isSaving ? '#93c5fd' : '#1d4ed8',
-          color: '#fff', border: 'none', borderRadius: '6px',
-          fontSize: '0.9rem', fontWeight: 600,
-          cursor: isSaving ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Save playlist'}
-      </button>
+      {/* Already-added section (muted) */}
+      {alreadyAdded.length > 0 && available.length > 0 && (
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid #dbeafe' }}>
+          <span style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Already in playlist
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.35rem', opacity: 0.4 }}>
+            {alreadyAdded.map((card) => (
+              <div key={card.id} style={{ width: '80px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}>
+                <CardStamp card={card} size="sm" />
+                <span style={{ fontSize: '0.55rem', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>
+                  {cardTitle(card)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {available.length === 0 && alreadyAdded.length > 0 && (
+        <p style={{ color: '#6b7280', fontSize: '0.78rem', margin: '0.25rem 0 0' }}>
+          All cards are already in the playlist.
+        </p>
+      )}
     </div>
   );
 }
@@ -418,7 +235,12 @@ export function Component(): JSX.Element {
   const [orderingRule, setOrderingRule] = useState<OrderingRule>('sequential');
   const [items, setItems] = useState<PlaylistItem[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(!isEdit); // new mode is immediately ready
+  const [hydrated, setHydrated] = useState(!isEdit);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  /* Drag state */
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   /* ---- Load playlist for edit mode ---- */
   const { data: existingPlaylist, isLoading: playlistLoading, isError: playlistError } =
@@ -428,7 +250,6 @@ export function Component(): JSX.Element {
       enabled: isEdit,
     });
 
-  /* Hydrate form when edit data arrives */
   useEffect(() => {
     if (existingPlaylist && !hydrated) {
       setName(existingPlaylist.name);
@@ -458,7 +279,7 @@ export function Component(): JSX.Element {
     },
   });
 
-  /* ---- Add card from picker ---- */
+  /* ---- Actions ---- */
   const addedIds = new Set(items.map((i) => i.content_id));
 
   function addCard(card: ContentItem): void {
@@ -469,7 +290,38 @@ export function Component(): JSX.Element {
     ]);
   }
 
-  /* ---- Submit ---- */
+  function move(index: number, direction: -1 | 1): void {
+    const next = [...items];
+    const swap = index + direction;
+    if (swap < 0 || swap >= next.length) return;
+    const tmp = next[index]!;
+    next[index] = next[swap]!;
+    next[swap] = tmp;
+    setItems(next);
+  }
+
+  function remove(index: number): void {
+    setItems(items.filter((_, i) => i !== index));
+  }
+
+  function updateDuration(index: number, value: string): void {
+    const secs = Math.max(5, Math.min(300, parseInt(value, 10) || 10));
+    setItems(items.map((it, i) => i === index ? { ...it, duration_seconds: secs } : it));
+  }
+
+  function handleDragStart(index: number): void { setDragIndex(index); }
+  function handleDragOver(e: React.DragEvent, index: number): void { e.preventDefault(); setDragOverIndex(index); }
+  function handleDrop(index: number): void {
+    if (dragIndex === null || dragIndex === index) { setDragIndex(null); setDragOverIndex(null); return; }
+    const next = [...items];
+    const [dragged] = next.splice(dragIndex, 1);
+    if (dragged) next.splice(index, 0, dragged);
+    setItems(next);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+  function handleDragEnd(): void { setDragIndex(null); setDragOverIndex(null); }
+
   function handleSave(): void {
     if (!name.trim()) { setValidationError('Playlist name is required.'); return; }
     if (name.length > 120) { setValidationError('Name exceeds 120 characters.'); return; }
@@ -482,7 +334,13 @@ export function Component(): JSX.Element {
     });
   }
 
-  /* ---- Loading / error state (edit mode only) ---- */
+  /* ---- Time metrics ---- */
+  const totalSeconds = items.reduce((sum, it) => sum + it.duration_seconds, 0);
+  const totalMinSec = totalSeconds >= 60
+    ? `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`
+    : `${totalSeconds}s`;
+
+  /* ---- Loading / error ---- */
   if (isEdit && playlistLoading) {
     return (
       <div style={{ fontFamily: 'system-ui, sans-serif' }}>
@@ -509,62 +367,222 @@ export function Component(): JSX.Element {
   const combinedError = validationError ?? (saveErr instanceof Error ? `Save failed: ${saveErr.message}` : null);
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827' }}>
-      {/* Page header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <Link to="/playlists" style={backLinkStyle}>← Playlists</Link>
-        <h1 style={{ margin: '0.5rem 0 0', fontSize: '1.5rem', fontWeight: 600 }}>
-          {isEdit ? `Edit: ${existingPlaylist?.name ?? '…'}` : 'New playlist'}
-        </h1>
+    <div style={{ fontFamily: 'system-ui, sans-serif', color: '#111827', maxWidth: '800px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div>
+          <Link to="/playlists" style={backLinkStyle}>← Playlists</Link>
+          <h1 style={{ margin: '0.5rem 0 0', fontSize: '1.5rem', fontWeight: 600 }}>
+            {isEdit ? `Edit: ${existingPlaylist?.name ?? '…'}` : 'New playlist'}
+          </h1>
+        </div>
+        {isEdit && id && (
+          <button
+            type="button"
+            onClick={() => window.open(`/preview/playlist/${id}`, '_blank', 'width=1280,height=720')}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: '6px',
+              border: '1px solid #d1d5db', backgroundColor: '#fff',
+              color: '#374151', fontSize: '0.85rem', fontWeight: 600,
+              cursor: 'pointer', whiteSpace: 'nowrap', marginTop: '1.5rem',
+            }}
+          >
+            ▶ Preview
+          </button>
+        )}
       </div>
 
-      {/* Two-column layout */}
-      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
-        {/* Left: card picker (40%) */}
-        <div style={{
-          width: '40%', flexShrink: 0,
-          border: '1px solid #e5e7eb', borderRadius: '8px',
-          padding: '1rem', backgroundColor: '#fafafa',
-          maxHeight: 'calc(100vh - 220px)', overflowY: 'auto',
+      {/* Settings row — name + ordering side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', marginBottom: '1.25rem', alignItems: 'end' }}>
+        <div>
+          <label style={labelStyle}>Playlist name</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+            maxLength={120} placeholder="e.g. Evening Bar Loop" style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Ordering</label>
+          <select value={orderingRule} onChange={(e) => setOrderingRule(e.target.value as OrderingRule)}
+            style={{ ...inputStyle, cursor: 'pointer', width: '200px' }}>
+            <option value="sequential">Sequential</option>
+            <option value="shuffle">Shuffle</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Add cards button / drawer */}
+      {!drawerOpen ? (
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          style={{
+            width: '100%', padding: '0.6rem', marginBottom: '1rem',
+            border: '2px dashed #bfdbfe', borderRadius: '8px',
+            backgroundColor: '#f8faff', color: '#1d4ed8',
+            fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+          }}
+        >
+          + Add cards
+          {availableCards.length > 0 && (
+            <span style={{ fontSize: '0.72rem', color: '#6b7280', fontWeight: 400 }}>
+              ({availableCards.length - addedIds.size} available)
+            </span>
+          )}
+        </button>
+      ) : (
+        <AddCardsDrawer
+          cards={availableCards}
+          isLoading={cardsLoading}
+          isError={cardsError}
+          addedIds={addedIds}
+          onAdd={addCard}
+          onClose={() => setDrawerOpen(false)}
+        />
+      )}
+
+      {/* Timeline header */}
+      <div style={{ marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {items.length} {items.length === 1 ? 'card' : 'cards'} in playlist
+          </span>
+          {items.length > 0 && (
+            <span style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+              Loop: <strong>{totalMinSec}</strong>
+            </span>
+          )}
+        </div>
+        {items.length > 0 && totalSeconds > 0 && (
+          <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', marginTop: '0.4rem', gap: '1px' }}>
+            {items.map((item) => {
+              const pct = (item.duration_seconds / totalSeconds) * 100;
+              const color = item.card ? (BADGE_COLORS[item.card.template_type] ?? '#6b7280') : '#6b7280';
+              return (
+                <div
+                  key={item.content_id}
+                  title={`${item.card ? cardTitle(item.card) : item.content_id}: ${item.duration_seconds}s (${pct.toFixed(0)}%)`}
+                  style={{ width: `${pct}%`, minWidth: '3px', backgroundColor: color, borderRadius: '1px' }}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Card list */}
+      {items.length === 0 && (
+        <p style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: '0.85rem', marginBottom: '1rem' }}>
+          No cards yet — click "+ Add cards" above.
+        </p>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1.25rem' }}>
+        {items.map((item, i) => {
+          const pct = totalSeconds > 0 ? ((item.duration_seconds / totalSeconds) * 100).toFixed(0) : '0';
+          const isDragOver = dragOverIndex === i && dragIndex !== i;
+          return (
+            <div
+              key={item.content_id}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={handleDragEnd}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.45rem 0.5rem', border: '1px solid #e5e7eb', borderRadius: '6px',
+                backgroundColor: dragIndex === i ? '#f0f9ff' : '#fff',
+                borderTopColor: isDragOver ? '#3b82f6' : '#e5e7eb',
+                borderTopWidth: isDragOver ? '2px' : '1px',
+                cursor: 'grab',
+              }}
+            >
+              {/* Position */}
+              <span style={{
+                flexShrink: 0, width: '1.4rem', height: '1.4rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.65rem', fontWeight: 700, color: '#9ca3af',
+                backgroundColor: '#f3f4f6', borderRadius: '4px',
+              }}>
+                {i + 1}
+              </span>
+
+              {/* Stamp + info */}
+              {item.card && <CardStamp card={item.card} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{
+                  fontSize: '0.8rem', fontWeight: 500, color: '#111827',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block',
+                }}>
+                  {item.card ? cardTitle(item.card) : item.content_id}
+                </span>
+                {item.card && <TemplateBadge type={item.card.template_type} />}
+              </div>
+
+              {/* Duration + % */}
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                <input
+                  type="number" min={5} max={300}
+                  value={item.duration_seconds}
+                  onChange={(e) => updateDuration(i, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: '44px', padding: '0.2rem 0.25rem',
+                    border: '1px solid #d1d5db', borderRadius: '4px',
+                    fontSize: '0.75rem', textAlign: 'right', fontFamily: 'system-ui',
+                  }}
+                />
+                <span style={{ fontSize: '0.6rem', color: '#9ca3af', width: '32px' }}>s ({pct}%)</span>
+              </div>
+
+              {/* Reorder + remove */}
+              <div style={{ flexShrink: 0, display: 'flex', gap: '0.15rem' }}>
+                <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+                  style={iconBtnStyle(i === 0)} aria-label="Move up">▲</button>
+                <button type="button" onClick={() => move(i, 1)} disabled={i === items.length - 1}
+                  style={iconBtnStyle(i === items.length - 1)} aria-label="Move down">▼</button>
+                <button type="button" onClick={() => remove(i)}
+                  style={{ ...iconBtnStyle(false), color: '#dc2626', backgroundColor: '#fef2f2', borderColor: '#fecaca' }}
+                  aria-label="Remove">✕</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Error */}
+      {combinedError && (
+        <div role="alert" style={{
+          padding: '0.625rem 0.75rem', backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca', borderRadius: '5px',
+          color: '#991b1b', fontSize: '0.8rem', marginBottom: '0.75rem',
         }}>
-          <CardPicker
-            cards={availableCards}
-            isLoading={cardsLoading}
-            isError={cardsError}
-            addedIds={addedIds}
-            onAdd={addCard}
-          />
+          {combinedError}
         </div>
+      )}
 
-        {/* Right: editor (60%) */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <PlaylistEditor
-            name={name}
-            onNameChange={setName}
-            orderingRule={orderingRule}
-            onOrderingRuleChange={setOrderingRule}
-            items={items}
-            onItemsChange={setItems}
-            onSave={handleSave}
-            isSaving={isSaving}
-            saveError={combinedError}
-            isEdit={isEdit}
-          />
-        </div>
-      </div>
+      {/* Save */}
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={isSaving}
+        style={{
+          width: '100%', padding: '0.65rem 1.25rem',
+          backgroundColor: isSaving ? '#93c5fd' : '#1d4ed8',
+          color: '#fff', border: 'none', borderRadius: '6px',
+          fontSize: '0.9rem', fontWeight: 600,
+          cursor: isSaving ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Save playlist'}
+      </button>
     </div>
   );
 }
 
 /* ================================================================== *
- * Style constants
+ * Styles
  * ================================================================== */
-
-const sectionHeading: React.CSSProperties = {
-  margin: '0 0 0.5rem',
-  fontSize: '0.75rem', fontWeight: 700, color: '#9ca3af',
-  textTransform: 'uppercase', letterSpacing: '0.06em',
-};
 
 const backLinkStyle: React.CSSProperties = {
   fontSize: '0.875rem', color: '#6b7280', textDecoration: 'none',
@@ -585,7 +603,7 @@ const inputStyle: React.CSSProperties = {
 
 function iconBtnStyle(disabled: boolean): React.CSSProperties {
   return {
-    padding: '0.2rem 0.35rem', fontSize: '0.65rem', fontWeight: 700,
+    padding: '0.2rem 0.3rem', fontSize: '0.6rem', fontWeight: 700,
     color: disabled ? '#d1d5db' : '#374151',
     backgroundColor: disabled ? '#f9fafb' : '#f3f4f6',
     border: `1px solid ${disabled ? '#e5e7eb' : '#d1d5db'}`,
